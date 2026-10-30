@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: last-unit
+    runtime: static
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
