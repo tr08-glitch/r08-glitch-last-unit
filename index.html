@@ -1,12 +1,4 @@
-<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="mobile-web-app-capable" content="yes">
-<link rel="icon" href="icon.png">
-<link rel="apple-touch-icon" href="icon.png">
-<title>ラスト・ユニット</title>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="mobile-web-app-capable" content="yes"><link rel="icon" href="icon.png"><link rel="apple-touch-icon" href="icon.png"><title>ラスト・ユニット</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -168,7 +160,7 @@ h1{margin:0;font-family:var(--font-display);font-weight:800;font-size:clamp(24px
   <section class="hud" aria-label="状態">
     <div class="hud-item hud-stage" id="hud-stage">第1区画 / 5</div>
     <div class="hud-item"><span class="hud-label">残機</span><span class="c-life life-num" id="p-life"></span></div>
-    <div class="hud-item"><span class="hud-label">パルスショット</span><span class="pips c-magic" id="p-msl"></span></div>
+    <div class="hud-item"><span class="hud-label" id="hud-main">パルスショット</span><span class="pips c-magic" id="p-msl"></span></div>
     <div class="hud-item"><span class="hud-label" id="hud-sub">プラズママイン</span><span class="pips c-mine" id="p-mine"></span></div>
   </section>
 
@@ -646,16 +638,18 @@ const DIFFS = [
 ];
 let DIFF = DIFFS[1], MODE = 'standard', menuStep = null;
 let REACH = 0; try { REACH = Math.max(0, parseInt(localStorage.getItem('lu_reach') || '0', 10) || 0); } catch (e) {}
-function mineCap(o) { return (TW() && o && o.idx !== undefined) ? 1 : CFG.mine.max; }
-function shotCap() { const hi = DIFF.key === 'crazy' || DIFF.key === 'absolute'; return TW() ? (hi ? 2 : 3) : (hi ? 3 : 5); }
+function mineCap(o) { if (BT()) return 2; return (TW() && o && o.idx !== undefined) ? 1 : CFG.mine.max; }
+function shotCap() { if (BT()) return 5; const hi = DIFF.key === 'crazy' || DIFF.key === 'absolute'; return TW() ? (hi ? 2 : 3) : (hi ? 3 : 5); }
 function noteReach(i) { if (i > REACH) { REACH = i; try { localStorage.setItem('lu_reach', String(i)); } catch (e) {} } }
 let stageIdx = 0, lives = CFG.lives;
 let wrecks = [];
 let grid, P, enemies = [], missiles = [], mines = [], grenades = [], lasers = [], blasts = [], parts = [];
 let PL = [], ME = 0, MP = false, OUT = [false, false], MID = 0;
 let TANDEM = false, TSWAP = false;   // タンデム: 1機を2人で操縦(TSWAP=falseなら ホスト=横移動+照準 / ゲスト=縦移動+攻撃)
-const TW = () => MP && !TANDEM;   // ツイン(2機)であるか
-const NET = { role: null, pc: null, dc: null, open: false, ev: [], rin: { ax: 0, ay: 0, mx: 0, my: 0, fcnt: 0, mcnt: 0, fdone: 0, mdone: 0 }, ld: 0, gridStr: '', wrLen: -1, snapN: 0, sendT: 0, fcnt: 0, mcnt: 0, trails: {} };
+const TW = () => MP && !TANDEM;
+const BT = () => MODE === 'battle';
+let BATTLE = null, BSEL = null, BM_LIST = [];   // ツイン(2機)であるか
+const NET = { role: null, pc: null, dc: null, open: false, gs: [], inGame: false, code: null, n: 2, ev: [], rin: { ax: 0, ay: 0, mx: 0, my: 0, fcnt: 0, mcnt: 0, fdone: 0, mdone: 0 }, ld: 0, gridStr: '', wrLen: -1, snapN: 0, sendT: 0, fcnt: 0, mcnt: 0, trails: {} };
 const evOn = () => NET.role === 'host' && NET.open;
 let shake = 0;
 const mouse = { x: W * 0.7, y: H * 0.5, down: false };
@@ -892,7 +886,8 @@ function musicSync() {
   try {
     musicInit();
     if (!MU.timer) MU.timer = setInterval(musicTick, 40);
-    if (!STAGES[stageIdx].boss) MU.tier = Math.min(3, Math.floor((stageNo(stageIdx) - 1) / 5));   // 5区画ごとに楽器が増える
+    if (STAGES[stageIdx].custom) MU.tier = Math.min(3, Math.max(0, STAGES[stageIdx].theme || 0));   // 作成マップ: 舞台ごとの曲(ボス入りならボス曲)
+    else if (!STAGES[stageIdx].boss) MU.tier = Math.min(3, Math.floor((stageNo(stageIdx) - 1) / 5));   // 5区画ごとに楽器が増える
     const key = wantTrack(); if (key !== MU.key || (MU.key && MU.sk !== sampleKey(MU.key))) musicSet(key);
     const f = muted ? 0 : state === 'paused' ? 0.3 : (state === 'clear' || state === 'gate' || state === 'clearwait') ? 0.5 : 1;
     if (f !== MU.vol) { MU.vol = f; MU.master.gain.setTargetAtTime(MU_BASE * f, a.currentTime, 0.25); }
@@ -980,7 +975,7 @@ function loadStage(i, keepKills) {
   $('field').style.aspectRatio = COLS + ' / ' + ROWS; fitTouch();
   grid = [];
   const all = [];
-  let start = [1, 1], startM = null, startQ = null, gatePos = null, entryPos = null;
+  let start = [1, 1], startM = null, startQ = null, startR = null, gatePos = null, entryPos = null;
   for (let y = 0; y < ROWS; y++) {
     const row = [];
     for (let x = 0; x < COLS; x++) {
@@ -994,6 +989,7 @@ function loadStage(i, keepKills) {
       else if (ch === 'P') start = [x, y];
       else if (ch === 'M') startM = [x, y];
       else if (ch === 'Q') startQ = [x, y];
+      else if (ch === 'R') startR = [x, y];
       else if (ENEMY_CH[ch]) all.push({ type: ENEMY_CH[ch], x, y, id: all.length });
       row.push(v);
     }
@@ -1010,8 +1006,13 @@ function loadStage(i, keepKills) {
   let list = all.filter(a => !killedIds.has(a.id));
   if (!list.length && !keepKills) { killedIds = new Set(); list = all; }   // 区画を始め直すときだけ全員で始める。敵を全滅させた後にやられたときは、誰もいない区画で再開する
   enemies = list.map(a => { const e = makeEnemy(a.type, a.x, a.y); e.id = a.id; if (e.boss && bossHpMem[a.id]) e.hp = Math.min(e.hp, bossHpMem[a.id]); return e; });
+  if (BT()) enemies = [];
   const mkP = (st, idx) => ({ x: (st[0] + 0.5) * T, y: (st[1] + 0.5) * T, r: CFG.player.radius, ang: 0, alive: true, cool: 0, laserCool: 0, idx });
-  if (TW()) {
+  if (BT() && BATTLE) {
+    const n = BATTLE.n, st = btStarts(n, [start, startM, startQ, startR].filter(Boolean));
+    PL = [];
+    for (let k = 0; k < n; k++) { const q = mkP(st[(k + BATTLE.round) % st.length], k); q.kit = BATTLE.kits[k] || 0; q.ang = Math.atan2(H / 2 - q.y, W / 2 - q.x); PL.push(q); }
+  } else if (TW()) {
     const s1 = startM || start, s2 = startQ || [start[0], Math.min(ROWS - 2, start[1] + 1)];
     PL = [mkP(s1, 0), mkP(s2, 1)];
     PL.forEach((q, k) => { if (OUT[k]) q.alive = false; });
@@ -1019,6 +1020,7 @@ function loadStage(i, keepKills) {
   P = PL[0]; NET.ld++; NET.gridStr = ''; NET.wrLen = -1; NET.trails = {};
   GATE = gateFromMap(gatePos) || pickGate(start[0], start[1]); gateRun = null; gateFade = 0; gateOpened = false; gateOpenT = 0;
   ENTRY = gateFromMap(entryPos) || pickEntry(start[0], start[1]); entryT = (stageIdx === 0 || keepKills) ? 99 : 0;   // 第1区画は最初から閉じている
+  if (BT()) { GATE = null; ENTRY = null; }
   pickups = []; floaters = []; wrecks = []; missiles = []; mines = []; grenades = []; lasers = []; blasts = []; parts = [];
   mouse.x = Math.min(mouse.x, W); mouse.y = Math.min(mouse.y, H);
   buildFloor();
@@ -1070,8 +1072,8 @@ function fireMagic(o, ang, kind, side, maxB) {
   let sx = o.x + Math.cos(ang) * (o.r + 7), sy = o.y + Math.sin(ang) * (o.r + 7);
   if (hitSolid(sx, sy, K.radius)) { sx = o.x; sy = o.y; }
   const evS = isEvo() && side === 'p' && kind === 'shot', vk = evS ? 1 + 0.07 * EVO.vel : 1;
-  missiles.push({ x: sx, y: sy, vx: Math.cos(ang) * K.speed * vk, vy: Math.sin(ang) * K.speed * vk, r: K.radius,
-    id: ++MID, kind, side, owner: o, bounces: 0, maxB: maxB === undefined ? K.maxBounces + (evS ? EVO.ref : 0) : maxB, trail: [], dead: false });
+  const mo = { x: sx, y: sy, vx: Math.cos(ang) * K.speed * vk, vy: Math.sin(ang) * K.speed * vk, r: K.radius,
+    id: ++MID, kind, side, owner: o, bounces: 0, maxB: maxB === undefined ? K.maxBounces + (evS ? EVO.ref : 0) : maxB, trail: [], dead: false }; missiles.push(mo); return mo;
 }
 function layMine(o, side) {
   if (countMines(o) >= mineCap(o)) return false;
@@ -1207,6 +1209,7 @@ function killPlayerMP() {
   if (!PL.some(q => q.alive)) { lives = 0; state = 'dead'; stateT = 1.5; showBannerRaw('', '全滅', ''); }
 }
 function killPlayer() {
+  if (BT()) { killPlayerBT(); return; }
   if (TW()) { killPlayerMP(); return; }
   if (!P.alive || state !== 'play') return;
   P.alive = false; lives--; mutualDone = false;
@@ -1461,12 +1464,13 @@ function drawBarrier(now) {
 const AMMO_REGEN = 2, CD = { mine: 1.0, grenade: 1.5, missile: 1.2 };   // パルスショットは0.5秒に1発回復。サブ武器のクールタイム
 const ctMul = () => isEvo() ? Math.max(0.5, 1 - 0.05 * (EVO.ct || 0)) : 1;   // CT短縮(最大-50%)
 function tickCools(p, dt) {
-  const mx = CFG.player.maxShots; if (p.ammo === undefined) p.ammo = mx;
+  const mx = BT() ? KITS[p.kit || 0].main.n : CFG.player.maxShots; if (p.ammo === undefined) p.ammo = mx;
   p.ammo = Math.min(mx, p.ammo + AMMO_REGEN * dt / ctMul());
   p.mslCool = Math.max(0, (p.mslCool || 0) - dt); p.mineCool = Math.max(0, (p.mineCool || 0) - dt); p.grCool = Math.max(0, (p.grCool || 0) - dt);
 }
 function tryFire() {
   if (state !== 'play' || !P.alive) return;
+  if (BT()) { battleFire(P); return; }
   if (P.ammo === undefined) P.ammo = CFG.player.maxShots;
   if (P.ammo < 1) return;   // 弾切れ(1秒に1発回復)
   if (countMagic(P, 'shot') >= CFG.player.maxShots) return;
@@ -1511,6 +1515,7 @@ function drawLaserAim(now) {
 }
 function layPlayerMine(remote) {   // 右クリック/Space: サブ武器(エヴォルヴでは兵装コアで切り替わる。初期はプラズママイン)
   if (NET.role === 'guest') { NET.mcnt++; return; }
+  if (BT()) { if (state === 'play' && P.alive) battleSub(P); return; }
   if (TANDEM && !remote && !tandemHostIsB()) return;
   if (state !== 'play' || !P.alive) return;
   const w = evoWeapon();
@@ -1521,7 +1526,7 @@ function layPlayerMine(remote) {   // 右クリック/Space: サブ武器(エヴ
   if (layMine(P, 'p')) P.mineCool = CD.mine * ctMul();
 }
 function stepRemote(p, dt) {
-  const r = NET.rin; P = p;
+  const r = remoteIn(p); P = p;
   if (p.alive) {
     const l0 = Math.hypot(r.ax, r.ay);
     if (l0 > 0.01) tryMove(p, r.ax / l0 * CFG.player.speed * dt, r.ay / l0 * CFG.player.speed * dt);
@@ -1537,6 +1542,7 @@ function stepRemote(p, dt) {
 }
 function updatePlayer(dt) {
   if (TANDEM) { updateTandem(dt); return; }
+  if (BT()) { if (PL[0].alive) { P = PL[0]; updatePlayer1(dt); } for (let k = 1; k < PL.length; k++) stepRemote(PL[k], dt); P = PL[0]; return; }
   if (!PL[0].alive) { if (MP && PL[1]) stepRemote(PL[1], dt); return; }
   P = PL[0];
   updatePlayer1(dt);
@@ -1643,7 +1649,7 @@ function updateMissiles(dt) {
 function updateMines(dt) {
   for (const m of mines.slice()) {
     m.t += dt;
-    if (m.trig === null && m.side === 'p' && enemies.some(e => dist(e, m) < CFG.mine.blastRadius + e.r * 0.6)) m.trig = CFG.mine.autoDelay;   // 敵が射程に入ると1秒後に自動で起爆
+    if (m.trig === null && m.side === 'p' && (enemies.some(e => dist(e, m) < CFG.mine.blastRadius + e.r * 0.6) || (BT() && PL.some(q => q.alive && q !== m.owner && dist(q, m) < CFG.mine.blastRadius + q.r * 0.6)))) m.trig = CFG.mine.autoDelay;   // 敵が射程に入ると1秒後に自動で起爆
     if (m.trig !== null) { m.trig -= dt; if (m.trig <= 0) explode(m); continue; }
     if (m.t >= CFG.mine.fuse) { explode(m); continue; }
     if (m.t >= CFG.mine.warnAt && Math.floor(m.t) !== Math.floor(m.t - dt)) sfx('tick');
@@ -1688,7 +1694,12 @@ function begin() {
   if (NET.role === 'guest') return;
   menuStep = null; OUT = [false, false]; lives = DIFF.lives;
   TSWAP = false;
-  if (evOn()) sendNet({ t: 'start', diff: DIFF.key, idx: startIdx, mode: MODE, td: TANDEM ? 1 : 0 });
+  if (evOn()) {
+    const gs = openGs();
+    if (gs.length !== 1) { showLobby(); return; }
+    gs.forEach((g, i) => { g.idx = i + 1; sendNet({ t: 'start', diff: DIFF.key, idx: startIdx, mode: MODE, td: TANDEM ? 1 : 0, me: g.idx }, g); });
+    NET.inGame = true; NET.rin = gs[0].rin;
+  }
   EVO = evoFresh(); evoApply(); evoSnap(); loadStage(startIdx); startReady(); }
 function nextStage() { evoSnap(); if (TANDEM && stdLike()) swapRoles(); loadStage(!stdLike() ? stageIdx : stageIdx + 1); startReady(); }
 function restartStage() { evoRestore(); loadStage(stageIdx); startReady(); }
@@ -1871,6 +1882,7 @@ function update(dt) {
     case 'ready': if (stateT <= 0) { state = 'play'; hideBanner(); } break;
     case 'play':
       updatePlayer(dt); if (isEvo()) updateGuns(dt); updateEnemies(dt); updateWorld(dt); if (isEvo()) updatePickups(dt);
+      if (BT()) { battleCheck(); break; }
       if (state === 'play' && enemies.length === 0 && PL.some(q => q.alive) && !gateOpened) { if (GATE) openGate(); else { goNext(); break; } }
       if (gateOpened) gateOpenT += dt;
       entryT += dt;
@@ -1879,6 +1891,7 @@ function update(dt) {
     case 'dead': updateWorld(dt); if (stateT <= 0) afterDeath(); break;
     case 'clear': updateWorld(dt); if (stateT <= 0) startGate(); break;
     case 'gate': updateWorld(dt); gateOpenT += dt; entryT += dt; updateGate(dt); break;
+    case 'bround': updateWorld(dt); if (stateT <= 0) battleNext(); break;
     case 'paused': break;
     default: updateFx(dt);
   }
@@ -1896,10 +1909,10 @@ function poly(x, y, r, n, rot) {
 }
 function rnd(n) { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); }
 function drawCrack(tx, ty, now) {   // 壊せる壁: 面全体にひび割れが走り、割れ目が熱で光る
-  const px = tx * T, py = ty * T, cx = px + T / 2, cy = py + T / 2, seed = tx * 31 + ty * 17;
+  const CK = NEON[Math.max(0, THEMES.indexOf(THEME))] || CK, px = tx * T, py = ty * T, cx = px + T / 2, cy = py + T / 2, seed = tx * 31 + ty * 17;
   const pu = 0.75 + 0.25 * Math.sin(now * 2.6 + seed);
   ctx.save(); ctx.beginPath(); ctx.rect(px, py, T, T); ctx.clip();
-  ctx.fillStyle = 'rgba(18,6,0,0.34)'; ctx.fillRect(px, py, T, T);   // 傷んで暗くなった面
+  ctx.fillStyle = 'rgba(0,4,12,0.5)'; ctx.fillRect(px, py, T, T);   // 傷んで暗くなった面
   const bolts = [];
   for (let k = 0; k < 5; k++) {   // 中心付近から縁へ向かう割れ目と、そこから枝分かれ
     let a = (k / 5) * Math.PI * 2 + (rnd(seed + k * 3.7) - 0.5) * 0.9, x = cx + (rnd(seed + k) - 0.5) * 6, y = cy + (rnd(seed + k + 9) - 0.5) * 6;
@@ -1909,10 +1922,10 @@ function drawCrack(tx, ty, now) {   // 壊せる壁: 面全体にひび割れが
   }
   const path = () => { for (const pts of bolts) { ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); } };
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#050200'; ctx.lineWidth = 4.2; ctx.globalAlpha = 0.85; ctx.beginPath(); path(); ctx.stroke();   // 割れ目の影
-  ctx.shadowColor = COLOR.mine; ctx.shadowBlur = 7; ctx.strokeStyle = COLOR.mine; ctx.lineWidth = 2; ctx.globalAlpha = 0.9 * pu; ctx.beginPath(); path(); ctx.stroke();   // 熱で光る割れ目
-  ctx.shadowBlur = 0; ctx.strokeStyle = '#fff3d0'; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.85 * pu; ctx.beginPath(); path(); ctx.stroke();   // 芯
-  ctx.globalAlpha = 0.35 * pu; ctx.fillStyle = COLOR.mine; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();   // 割れの中心のくすぶり
+  ctx.strokeStyle = '#02050a'; ctx.lineWidth = 4.2; ctx.globalAlpha = 0.85; ctx.beginPath(); path(); ctx.stroke();   // 割れ目の影
+  ctx.shadowColor = CK; ctx.shadowBlur = 7; ctx.strokeStyle = CK; ctx.lineWidth = 2; ctx.globalAlpha = 0.9 * pu; ctx.beginPath(); path(); ctx.stroke();   // 熱で光る割れ目
+  ctx.shadowBlur = 0; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.85 * pu; ctx.beginPath(); path(); ctx.stroke();   // 芯
+  ctx.globalAlpha = 0.35 * pu; ctx.fillStyle = CK; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();   // 割れの中心のくすぶり
   ctx.restore();
 }
 function drawFence(tx, ty) {
@@ -1978,10 +1991,9 @@ function drawWalls(now) {
       const isW = (xx, yy) => yy < 0 || xx < 0 || yy >= ROWS || xx >= COLS || grid[yy][xx] === 1 || grid[yy][xx] === 2;
       const up = !isW(x, y - 1), dn = !isW(x, y + 1), lf = !isW(x - 1, y), rt = !isW(x + 1, y);
       ctx.fillStyle = WALLTHEME[THEMES.indexOf(THEME)] || WALLTEX.pat; ctx.fillRect(px, py, T, T);
-      if (v === 2) { ctx.fillStyle = 'rgba(255,150,70,0.16)'; ctx.fillRect(px, py, T, T); }
       ctx.fillStyle = 'rgba(6,10,22,' + (WALLDIM[THEMES.indexOf(THEME)] || 0.3) + ')'; ctx.fillRect(px, py, T, T);   // 暗い床になじむよう、壁を少し沈める(白い壁は強め)
       const HI = THEME.hi, LO = '#0b1220', NE = NEON[Math.max(0, THEMES.indexOf(THEME))] || HI;
-      const pu = 0.82 + 0.18 * Math.sin(now * 2.2 + (x * 1.7 + y * 2.3));   // ネオンのゆるい明滅
+      const pu = (0.82 + 0.18 * Math.sin(now * 2.2 + (x * 1.7 + y * 2.3))) * (v === 2 ? 0.5 : 1);   // ネオンのゆるい明滅
       ctx.fillStyle = NE;
       ctx.globalAlpha = 0.16 * pu;   // 外側のにじみ(縁の内側へ)
       if (up) ctx.fillRect(px, py, T, 9);
@@ -2069,6 +2081,10 @@ function drawMine(m, now) {
   ctx.restore();
 }
 function drawMissile(m) {
+  drawMissile0(m);
+  if (BT() && m.owner && m.owner.idx !== undefined) { ctx.save(); ctx.strokeStyle = BCOL[m.owner.idx % 4]; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * 2.1, 0, 7); ctx.stroke(); ctx.restore(); }
+}
+function drawMissile0(m) {
   if (fxDraw(m.kind === 'missile' ? 'missile' : (m.side === 'p' ? 'shot_p' : 'shot_e'), m.x, m.y, Math.atan2(m.vy, m.vx))) return;
   const c = magicColor(m), big = m.kind === 'missile';
   ctx.lineCap = 'round'; ctx.strokeStyle = c;
@@ -2152,18 +2168,17 @@ function drawEnemy(e, now) {
 }
 function drawPlayerOne(P) {
   if (!P.alive) return;
-  if (P.idx === 1 && !SPR.player2 && SPR.player.ok) { try { SPR.player2 = buildP2(); } catch (e) { SPR.player2 = { ok: false }; } }
   ctx.save();
   ctx.translate(P.x, P.y);
   if (gateRun && GATE) { const u = -((P.x - (GATE.x + 0.5) * T) * GATE.nx + (P.y - (GATE.y + 0.5) * T) * GATE.ny) / (T * 1.6); if (u > 0) { const q = Math.min(1, u); ctx.scale(1 - 0.6 * q, 1 - 0.6 * q); ctx.globalAlpha = 1 - 0.7 * q; } }
   ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.beginPath(); ctx.ellipse(2, 4, P.r + 1, P.r - 1, 0, 0, Math.PI * 2); ctx.fill();
   if (SPR.player.ok) {   // 2Pは色違い   // 画像で描く(砲が右向きの絵を、狙う向きへ回す)
-    const S = (P.idx === 1 && SPR.player2 && SPR.player2.ok) ? SPR.player2 : SPR.player; let F = S.frames[0], bd = 9;   // 8方向の絵から、狙う向きに一番近いものを選び、残りの角度だけ回す
+    const S = pSpr(P.idx); let F = S.frames[0], bd = 9;   // 8方向の絵から、狙う向きに一番近いものを選び、残りの角度だけ回す
     for (const f of S.frames) { const dd = Math.atan2(Math.sin(P.ang - f.ang * Math.PI / 180), Math.cos(P.ang - f.ang * Math.PI / 180)); if (Math.abs(dd) < Math.abs(bd)) { bd = dd; F = f; } }
     ctx.rotate(bd);
     ctx.drawImage(F.img, -F.cx * S.k, -F.cy * S.k, F.w * S.k, F.h * S.k);
     ctx.restore();
-    if (TW()) { ctx.fillStyle = P.idx ? '#7dffa0' : '#8af0ff'; ctx.font = '700 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(P.idx ? '2P' : '1P', P.x, P.y - 24); }
+    if (TW()) { ctx.fillStyle = BCOL[P.idx % 4]; ctx.font = '700 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText((P.idx + 1) + 'P', P.x, P.y - 24); }
     return;
   }
   ctx.strokeStyle = COLOR.magic; ctx.lineWidth = 7; ctx.lineCap = 'round';
@@ -2305,12 +2320,14 @@ makePips($('p-mine'), CFG.mine.max, 'round');
 let hudKey = '';
 function updateHud() {
   const me = PL[ME] || P;
-  const pm = me.ammo !== undefined ? Math.floor(me.ammo + 1e-6) : CFG.player.maxShots - countMagic(me, 'shot'), mm = (TW() ? 1 : CFG.mine.max) - countMines(me);
-  const k = stageIdx + '|' + lives + '|' + pm + '|' + mm + '|' + MP + '|' + TANDEM + TSWAP + '|' + (isEvo() ? [EVO.cur, EVO.weapons.length, EVO.ref, EVO.bar, EVO.gun, EVO.ct, EVO.spd, EVO.cnt, EVO.vel, EVO.scr].join(',') : '');
+  let pm = me.ammo !== undefined ? Math.floor(me.ammo + 1e-6) : CFG.player.maxShots - countMagic(me, 'shot'), mm = (TW() ? 1 : CFG.mine.max) - countMines(me);
+  if (BT()) { const K = KITS[me.kit || 0]; pm = K.main.n - mainCount(me, K.main.kind); mm = K.sub.n - subCount(me); }
+  { const hm = $('hud-main'), mt = BT() ? (KITS[me.kit || 0].main.kind === 'missile' ? 'パルスミサイル' : 'パルスショット') : 'パルスショット'; if (hm && hm.textContent !== mt) hm.textContent = mt; }
+  const k = stageIdx + '|' + lives + '|' + pm + '|' + mm + '|' + MP + '|' + TANDEM + TSWAP + (BT() ? scoreText() + (me.kit || 0) : '') + '|' + (isEvo() ? [EVO.cur, EVO.weapons.length, EVO.ref, EVO.bar, EVO.gun, EVO.ct, EVO.spd, EVO.cnt, EVO.vel, EVO.scr].join(',') : '');
   if (k === hudKey) return;
   hudKey = k;
-  $('hud-stage').textContent = stageLabel(stageIdx, true) + (TANDEM ? ' ・ ' + tandemRoles() : '') + (isEvo() ? ' ・ サブ:' + WNAME[evoWeapon()] + ' 反射+' + EVO.ref + ' バリア' + (EVO.bar || 0) + ' 小銃' + (EVO.gun || 0) + ' CT-' + (EVO.ct || 0) * 5 + '%' + ' 機動+' + EVO.spd * 6 + '% 弾+' + (EVO.cnt / 3).toFixed(1) + ' 弾速+' + EVO.vel * 7 + '% ・ ネジ' + EVO.scr + '/3' : '');
-  { const w = isEvo() ? evoWeapon() : 'mine'; $('hud-sub').innerHTML = (EVURI['w_' + w] ? `<img src="${EVURI['w_' + w]}" width="22" height="22" style="vertical-align:middle;margin-right:4px;image-rendering:pixelated">` : '') + WNAME[w]; }
+  $('hud-stage').textContent = (BT() ? 'バトル ・ ' + (BATTLE ? BATTLE.map.name : '') + ' ・ ' + scoreText() : stageLabel(stageIdx, true)) + (TANDEM ? ' ・ ' + tandemRoles() : '') + (isEvo() ? ' ・ サブ:' + WNAME[evoWeapon()] + ' 反射+' + EVO.ref + ' バリア' + (EVO.bar || 0) + ' 小銃' + (EVO.gun || 0) + ' CT-' + (EVO.ct || 0) * 5 + '%' + ' 機動+' + EVO.spd * 6 + '% 弾+' + (EVO.cnt / 3).toFixed(1) + ' 弾速+' + EVO.vel * 7 + '% ・ ネジ' + EVO.scr + '/3' : '');
+  { const w = BT() ? KITS[me.kit || 0].sub.kind : isEvo() ? evoWeapon() : 'mine'; $('hud-sub').innerHTML = (EVURI['w_' + w] ? `<img src="${EVURI['w_' + w]}" width="22" height="22" style="vertical-align:middle;margin-right:4px;image-rendering:pixelated">` : '') + WNAME[w]; }
   $('p-life').textContent = TW() ? '—' : '× ' + lives; setPips($('p-msl'), pm); setPips($('p-mine'), mm);
 }
 function showBannerRaw(stage, name, hint) {
@@ -2342,9 +2359,9 @@ function showMenu(step) {
   let h = '';
   if (step === 'mode') {
     h = `<div class="menu-grid mode-row">
-      <button class="btn" data-act="mode" data-v="standard"><img src="${EVURI.m_std}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>スタンダード</span><small>区画を順に進む基本のモード</small></button>
-      <button class="btn" data-act="mode" data-v="practice"><img src="${EVURI.m_prc}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>プラクティス</span><small>到達した区画を練習</small></button>
+      <button class="btn" data-act="mode" data-v="standard"><img src="${EVURI.m_std}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>スタンダード</span><small>インベイド・プラクティス</small></button>
       <button class="btn" data-act="mode" data-v="evolve"><img src="${EVURI.mode}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>エヴォルヴ</span><small>残骸のパーツで成長</small></button>
+      <button class="btn" data-act="mode" data-v="multi"><img src="${EVURI.m_twin}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>マルチプレイ</span><small>2〜4人・オンライン</small></button>
       <button class="btn" data-act="mode" data-v="create"><img src="${EVURI.m_cre}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>クリエイト</span><small>マップを作って遊ぶ</small></button>
       </div>`;
     const keepLogo = !overlayEl.hidden && panelEl.querySelector('.title-top .title-logo');
@@ -2357,16 +2374,11 @@ function showMenu(step) {
     overlayEl.classList.add('title'); panelEl.classList.add('wide');
     const fb0 = panelEl.querySelector('.menu-grid .btn:not([disabled])'); if (fb0) fb0.focus({ preventScroll: true });
     return;
-  } else if (step === 'players') {
-    h = `<h2 class="ov-title">プレイ人数</h2><div class="menu-grid">
-      <button class="btn" data-act="players" data-v="solo">ソロ<small>1人で遊ぶ</small></button>
-      <button class="btn" data-act="players" data-v="multi">マルチ<small>2人プレイ・オンライン</small></button>
+  } else if (step === 'std') {
+    h = `<h2 class="ov-title">スタンダード</h2><div class="menu-grid">
+      <button class="btn" data-act="invade"><img src="${EVURI.m_std}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>インベイド</span><small>区画を順に進む、メインのモード</small></button>
+      <button class="btn" data-act="practice"><img src="${EVURI.m_prc}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>プラクティス</span><small>到達した区画を練習</small></button>
       ${back('mode')}</div>`;
-  } else if (step === 'mpmode') {
-    h = `<h2 class="ov-title">マルチのモード</h2><div class="menu-grid">
-      <button class="btn" data-act="mpmode" data-v="twin"><img src="${EVURI.m_twin}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>ツイン・ユニット</span><small>2機で並んで戦う</small></button>
-      <button class="btn" data-act="mpmode" data-v="tandem"><img src="${EVURI.m_tan}" width="56" height="56" style="display:block;margin:0 auto 4px"><span>タンデム・ユニット</span><small>1機を2人で操縦(横移動+照準 / 縦移動+攻撃)。区画クリアで役割交代</small></button>
-      <button class="btn" data-act="back" data-v="mpback">もどる</button></div>`;
   } else if (step === 'cmenu') {
     const maps = loadMaps();
     h = `<h2 class="ov-title">クリエイト</h2><div class="menu-grid cr-list"><button class="btn" data-act="cr-new">新しいマップを作る</button>
@@ -2374,36 +2386,47 @@ function showMenu(step) {
       <button class="btn" data-act="cr-import">読み込み(JSON)</button><button class="btn" data-act="back" data-v="title">もどる</button></div>`;
   } else if (step === 'pstage') {
     h = `<h2 class="ov-title">区画選択</h2><div class="menu-grid stage-grid">${STAGES.map((_, i) => i <= REACH ? `<button class="btn" data-act="pstage" data-v="${i}">${stageLabel(i)}<small>${STAGES[i].name || ''}</small></button>` : `<button class="btn" disabled>${stageLabel(i)}<small>未到達</small></button>`).join('')}
-      ${back('players')}</div>`;
+      ${back('std')}</div>`;
   } else if (step === 'diff') {
     h = `<h2 class="ov-title">難易度選択</h2><div class="menu-grid">${DIFFS.map(d => `<button class="btn" data-act="diff" data-v="${d.key}">${d.name}</button>`).join('')}
       ${MODE === 'practice' ? '' : `<label class="ov-sub">開始区画(テスト用) <select id="start-sel">${STAGES.map((_, i) => `<option value="${i}"${i === startIdx ? ' selected' : ''}>${stageLabel(i)}</option>`).join('')}</select></label>`}
-      ${back(MODE === 'practice' ? 'pstage' : MODE === 'evolve' ? 'mode' : MODE === 'create' ? 'crback' : (MP ? 'mpback' : 'players'))}</div>`;
+      ${back(MODE === 'practice' ? 'pstage' : MODE === 'evolve' ? 'mode' : MODE === 'create' ? 'crback' : (MP ? 'mpback' : 'std'))}</div>`;
   }
   showOverlay('<div class="menu-wrap">' + h + '</div>'); overlayEl.classList.add('title'); panelEl.classList.add('wide');
   const ss = $('start-sel'); if (ss) ss.addEventListener('change', e => { startIdx = +e.target.value; });
   const fb = panelEl.querySelector('.menu-grid .btn:not([disabled])'); if (fb) fb.focus({ preventScroll: true });
 }
 function menuAct(act, v) {
-  if (act === 'back') { if (v === 'title') showTitle(); else if (v === 'mpback') showLobby(); else if (v === 'crback') { if (ED) showEditor(); else showMenu('cmenu'); } else showMenu(v); }
-  else if (act === 'mode') { dropCustom(); MODE = v; MP = false; TANDEM = false; if (v === 'create') { netClose(); ED = null; showMenu('cmenu'); } else if (v === 'evolve') { netClose(); startIdx = 0; showMenu('diff'); } else showMenu('players'); }
-  else if (act.startsWith('cr-')) createAct(act.slice(3), v);
-  else if (act === 'players') {
-    MP = (v === 'multi'); ME = 0; TANDEM = false;
-    if (MP) { showLobby(); return; }
-    netClose();
-    if (MODE === 'practice') showMenu('pstage'); else { startIdx = 0; showMenu('diff'); }
+  if (act === 'back') { if (v === 'mode' || v === 'std') { netClose(); MP = false; TANDEM = false; MODE = 'standard'; } if (v === 'title') showTitle(); else if (v === 'mpback') showLobby(); else if (v === 'crback') { if (ED) showEditor(); else showMenu('cmenu'); } else showMenu(v); }
+  else if (act === 'mode') {
+    dropCustom(); MP = false; TANDEM = false; netClose();
+    if (v === 'create') { MODE = 'create'; ED = null; showMenu('cmenu'); }
+    else if (v === 'evolve') { MODE = 'evolve'; startIdx = 0; showMenu('diff'); }
+    else if (v === 'multi') { MODE = 'standard'; ME = 0; showLobby(); }
+    else { MODE = 'standard'; showMenu('std'); }
   }
+  else if (act === 'invade') { MODE = 'standard'; startIdx = 0; showMenu('diff'); }
+  else if (act === 'practice') { MODE = 'practice'; showMenu('pstage'); }
+  else if (act.startsWith('cr-')) createAct(act.slice(3), v);
   else if (act === 'lobby') netLobbyAct(v);
   else if (act === 'mpnext') showMenu('mpmode');
-  else if (act === 'mpmode') { TANDEM = (v === 'tandem'); if (MODE === 'practice') showMenu('pstage'); else { startIdx = 0; showMenu('diff'); } }
+  else if (act === 'mpmode') {
+    if (v === 'battle') { MODE = 'battle'; TANDEM = false; showBattleMaps(); return; }
+    MODE = 'standard'; TANDEM = (v === 'tandem'); startIdx = 0; showMenu('diff');
+  }
+  else if (act === 'bmap') { const m = BM_LIST[+v]; if (!m) return; const n = playersN(); BSEL = { map: { name: m.name, theme: m.theme, grid: m.grid.map(String) }, k: Array(n).fill(0), r: Array(n).fill(false) }; sendNet({ t: 'bsel', map: BSEL.map, k: BSEL.k, r: BSEL.r }); showKitSelect(); }
+  else if (act === 'bmaps') showBattleMaps();
+  else if (act === 'kit') { if (!BSEL) return; BSEL.k[ME] = +v; BSEL.r[ME] = true; if (NET.role === 'host') { sendNet({ t: 'kits', k: BSEL.k, r: BSEL.r }); } else sendNet({ t: 'kit', k: +v }); showKitSelect(); }
+  else if (act === 'bstart') { if (BSEL && BSEL.r.every(Boolean)) beginBattle(); }
   else if (act === 'pstage') { startIdx = +v; showMenu('diff'); }
-  else if (act === 'diff') { DIFF = DIFFS.find(d => d.key === v) || DIFFS[1]; begin(); }
+  else if (act === 'diff') { DIFF = DIFFS.find(d => d.key === v) || DIFFS[1]; if (MODE === 'create') TESTDIFF = DIFF; begin(); }
 }
 panelEl.addEventListener('click', e => {
   if (state === 'title' && !menuStep) { showMenu('mode'); return; }
   const ma = e.target.closest('[data-act]'); if (ma) { menuAct(ma.dataset.act, ma.dataset.v); return; }
   if (e.target.closest('#ov-sel')) { state = 'title'; hideBanner(); mouse.down = false; keys.clear(); if (MODE === 'create') { dropCustom(); if (ED) showEditor(); else showMenu('cmenu'); } else showMenu('pstage'); return; }
+  if (e.target.closest('#bt-again')) { if (NET.role === 'host') beginBattle(); return; }
+  if (e.target.closest('#bt-room')) { if (NET.role === 'host') battleToRoom(); return; }
   if (e.target.closest('#ov-title')) { backToTitle(); return; }
   const pk = e.target.closest('[data-pick]'); if (pk) { evoPick(+pk.dataset.pick); return; }
   if (e.target.closest('.btn') && NET.role !== 'guest') confirmAction();
@@ -2427,7 +2450,7 @@ window.addEventListener('keydown', e => {
     if (e.code === 'Space') layPlayerMine();
     if ((e.code === 'KeyP' || e.code === 'Escape') && NET.role !== 'guest') togglePause();
     if (e.code === 'KeyE') cycleWeapon();
-    if (e.code === 'KeyR' && ['play', 'dead', 'ready'].includes(state) && NET.role !== 'guest') restartStage();
+    if (e.code === 'KeyR' && !BT() && ['play', 'dead', 'ready'].includes(state) && NET.role !== 'guest') restartStage();
     if (e.code === 'KeyM') { muted = !muted; $('snd').textContent = '音: ' + (muted ? 'OFF' : 'ON'); }
   }
   keys.add(e.code);
@@ -2511,19 +2534,162 @@ if (IS_TOUCH) (function () {
   fitTouch();
 })();
 
+
+/* ---------- クリエイト: テストプレイ中の「エディタに戻る」 ---------- */
+(function () {
+  const b = document.createElement('button'); b.id = 'ed-back'; b.className = 'btn'; b.textContent = '← エディタに戻る'; b.hidden = true;
+  b.style.cssText = 'position:absolute;right:8px;top:8px;z-index:35;padding:6px 12px;font-size:13px';
+  $('field').appendChild(b);
+  b.addEventListener('click', e => { e.stopPropagation(); state = 'title'; hideBanner(); hideOverlay(); mouse.down = false; keys.clear(); dropCustom(); if (ED) showEditor(); else showMenu('cmenu'); });
+  b.addEventListener('pointerdown', e => e.stopPropagation());
+  setInterval(() => { b.hidden = !(MODE === 'create' && ED && ['play', 'dead', 'ready', 'paused', 'clear', 'clearwait', 'win', 'over'].includes(state)); }, 200);
+})();
+
+
+/* ---------- バトル: プレイヤー同士の対戦(2〜4人) ---------- */
+const BCOL = ['#8af0ff', '#7dffa0', '#ffb04a', '#ff6ad5'];
+const KITS = [   // 機体(仮名)
+  { name: 'ベーシック', main: { kind: 'shot', n: 5 }, sub: { kind: 'mine', n: 2 }, txt: 'メイン パルス×5 ／ サブ マイン×2' },
+  { name: 'アサルト', main: { kind: 'shot', n: 5 }, sub: { kind: 'missile', n: 2 }, txt: 'メイン パルス×5 ／ サブ ミサイル×2' },
+  { name: 'ランサー', main: { kind: 'missile', n: 3 }, sub: { kind: 'rmissile', n: 1 }, txt: 'メイン ミサイル×3 ／ サブ 反射ミサイル×1' },
+];
+const BATTLE_MAPS = [{"name": "クロスアリーナ", "theme": 2, "grid": ["########################", "#P....................M#", "#..##...%......%...##..#", "#..#................#..#", "#.....##........##.....#", "#.%...#....FF....#...%.#", "#.....#..........#.....#", "#......................#", "#......................#", "#.....#..........#.....#", "#.%...#....FF....#...%.#", "#.....##........##.....#", "#..#................#..#", "#..##...%......%...##..#", "#Q....................R#", "########################"]}, {"name": "ブロックシティ", "theme": 1, "grid": ["########################", "#P....................M#", "#.##.##.##....##.##.##.#", "#.##.##.##....##.##.##.#", "#......................#", "#.##..%..........%..##.#", "#.##..%..##..##..%..##.#", "#......................#", "#......................#", "#.##..%..##..##..%..##.#", "#.##..%..........%..##.#", "#......................#", "#.##.##.##....##.##.##.#", "#.##.##.##....##.##.##.#", "#Q....................R#", "########################"]}, {"name": "ミラーホール", "theme": 4, "grid": ["########################", "#P.....F........F.....M#", "#.####.F.##..##.F.####.#", "#......F.#....#.F......#", "#.F.%.....#..#.....%.F.#", "#.F.%.###.F..F.###.%.F.#", "#.....#..........#.....#", "#......................#", "#......................#", "#.....#..........#.....#", "#.F.%.###.F..F.###.%.F.#", "#.F.%.....#..#.....%.F.#", "#......F.#....#.F......#", "#.####.F.##..##.F.####.#", "#Q.....F........F.....R#", "########################"]}];   // 仮のバトルマップ(あとで個別に作り直す)。P/M/Q/R = 1P〜4Pの開始位置
+const pSprC = {};
+function pSpr(idx) {
+  if (idx < 1) return SPR.player;
+  if (!pSprC[idx] && SPR.player.ok) { try { pSprC[idx] = buildP2([0, -65, -180, 110][idx % 4]); } catch (e) { pSprC[idx] = { ok: false }; } }
+  return pSprC[idx] && pSprC[idx].ok ? pSprC[idx] : SPR.player;
+}
+function btStarts(n, first) {
+  const pts = first.slice(), fl = [];
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (grid[y][x] === 0) fl.push([x, y]);
+  if (!pts.length && fl.length) pts.push(fl[0]);
+  while (pts.length < n && fl.length) {
+    let best = null, bd = -1;
+    for (const c of fl) { const d = Math.min(...pts.map(p => Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]))); if (d > bd) { bd = d; best = c; } }
+    pts.push(best);
+  }
+  return pts.slice(0, Math.max(n, 1));
+}
+const pname = i => (i + 1) + 'P';
+const scoreText = () => BATTLE ? BATTLE.score.map((s, i) => pname(i) + ' ' + s).join(' / ') + '(先に' + BATTLE.target + '勝)' : '';
+const mainCount = (p, kind) => missiles.filter(m => m.owner === p && !m.dead && m.kind === kind && !m.sub).length;
+const subCount = p => KITS[p.kit || 0].sub.kind === 'mine' ? countMines(p) : missiles.filter(m => m.owner === p && !m.dead && m.sub).length;
+function battleFire(p) {
+  const K = KITS[p.kit || 0].main;
+  if (p.ammo === undefined) p.ammo = K.n;
+  if (p.ammo < 1 || mainCount(p, K.kind) >= K.n) return;
+  p.ammo -= 1; fireMagic(p, p.ang, K.kind, 'p');
+  p.cool = K.kind === 'shot' ? CFG.player.fireCooldown : 0.45; sfx(K.kind === 'shot' ? 'shot' : 'missile');
+}
+function battleSub(p) {
+  const S = KITS[p.kit || 0].sub;
+  if (S.kind === 'mine') { if ((p.mineCool || 0) > 0 || countMines(p) >= S.n) return; if (layMine(p, 'p')) p.mineCool = CD.mine; return; }
+  if ((p.mslCool || 0) > 0 || subCount(p) >= S.n) return;
+  const m = fireMagic(p, p.ang, 'missile', 'p', S.kind === 'rmissile' ? 2 : undefined); m.sub = true;
+  p.mslCool = S.kind === 'rmissile' ? 1.5 : CD.missile; sfx('missile');
+}
+function killPlayerBT() {
+  if (!P.alive || state !== 'play') return;
+  P.alive = false; burst(P.x, P.y, BCOL[P.idx % 4], 28, 230, 0.8); shake = Math.max(shake, 0.4); sfx('die');
+}
+function battleCheck() {
+  if (state !== 'play' || !BATTLE) return;
+  const al = PL.filter(q => q.alive);
+  if (al.length > 1) return;
+  const w = al.length ? al[0].idx : -1;
+  if (w >= 0) BATTLE.score[w]++;
+  BATTLE.last = w; state = 'bround'; stateT = 2.6; hudKey = '';
+  showBannerRaw(scoreText(), w >= 0 ? pname(w) + ' の勝利!' : '引き分け', '');
+}
+function battleNext() {
+  hideBanner();
+  if (Math.max(...BATTLE.score) >= BATTLE.target) { matchEnd(); return; }
+  BATTLE.round++; startRound();
+}
+function startRound() {
+  loadStage(startIdx); state = 'ready'; stateT = 2.0; hudKey = '';
+  showBannerRaw('ラウンド ' + (BATTLE.round + 1) + ' ・ ' + scoreText(), BATTLE.map.name, '');
+  hideOverlay();
+}
+function matchEnd() {
+  state = 'bend'; hudKey = '';
+  const best = Math.max(...BATTLE.score), ws = BATTLE.score.map((s, i) => s === best ? i : -1).filter(i => i >= 0);
+  const rows = BATTLE.score.map((s, i) => `<div class="ov-sub" style="color:${BCOL[i % 4]}">${pname(i)}　${s}勝${ws.includes(i) ? ' ★' : ''}</div>`).join('');
+  showOverlay(`<h2 class="ov-title">バトル終了</h2><p class="ov-msg">${ws.map(pname).join('・')} の優勝!</p>${rows}<button class="btn" id="bt-again" data-host="1">もう一度</button> <button class="btn" id="bt-room" data-host="1">ルームへ戻る</button> <button class="btn" id="ov-title">タイトルへ戻る</button>`);
+}
+function beginBattle() {
+  if (NET.role !== 'host' || !BSEL) return;
+  NET.gs = NET.gs.filter(g => g.open); const gs = NET.gs; gs.forEach((g, i) => { g.idx = i + 1; });
+  const n = gs.length + 1; if (n < 2) { showLobby(); return; }
+  dropCustom(); const mp = BSEL.map;
+  STAGES.push({ name: mp.name, custom: true, theme: mp.theme, hint: '', boss: false, grid: mp.grid });
+  startIdx = STAGES.length - 1; MODE = 'battle'; MP = true; TANDEM = false; TSWAP = false; DIFF = DIFFS[1]; ME = 0; menuStep = null;
+  const kits = BSEL.k.slice(0, n); while (kits.length < n) kits.push(0);
+  BATTLE = { n, kits, score: Array(n).fill(0), round: 0, target: 3, map: mp, last: -1 };
+  CFG.player.maxShots = 5; rebuildShotPips(); NET.rin = gs[0].rin; NET.inGame = true;
+  gs.forEach(g => sendNet({ t: 'start', diff: DIFF.key, idx: startIdx, mode: 'battle', td: 0, me: g.idx, n, kits, map: mp }, g));
+  startRound();
+}
+function battleToRoom() {
+  NET.inGame = false; MODE = 'standard'; hideBanner(); hideOverlay(); mouse.down = false; keys.clear(); dropCustom();
+  sendNet({ t: 'toroom' });
+  const mp = MP; MP = false; state = 'title'; loadStage(0); MP = mp; showLobby(); sendLobby();
+}
+function showBattleMaps() {
+  state = 'title'; menuStep = 'bmap';
+  BM_LIST = BATTLE_MAPS.map(m => ({ name: m.name, theme: m.theme, grid: m.grid, src: 'preset' })).concat(loadMaps().filter(m => m.grid && m.grid.length).map(m => ({ name: m.name, theme: m.theme || 0, grid: m.grid, src: 'custom' })));
+  lobbyPanel(`<h2 class="ov-title">マップ選択</h2><div class="menu-grid cr-list">${BM_LIST.map((m, i) => `<button class="btn" data-act="bmap" data-v="${i}">${esc(m.name)}<small>${m.src === 'custom' ? '自作マップ ' : 'バトルマップ '}${m.grid[0].length}×${m.grid.length}</small></button>`).join('')}<button class="btn" data-act="back" data-v="mpback">もどる</button></div>`);
+}
+function showKitSelect() {
+  state = 'title'; menuStep = 'bkit';
+  const host = NET.role === 'host', mine = BSEL.k[ME], rd = BSEL.r[ME], all = BSEL.r.every(Boolean);
+  const st = BSEL.k.map((k, i) => `<span style="color:${BCOL[i % 4]}">${pname(i)}${i === ME ? '(あなた)' : ''}: ${BSEL.r[i] ? KITS[k].name + ' ✔' : '選択中…'}</span>`).join('　');
+  lobbyPanel(`<h2 class="ov-title">機体選択</h2><p class="ov-sub">マップ: ${esc(BSEL.map.name)}</p><div class="menu-grid">${KITS.map((k, i) => `<button class="btn" data-act="kit" data-v="${i}"${rd && mine === i ? ' style="outline:2px solid #7dffa0"' : ''}>${k.name}<small>${k.txt}</small></button>`).join('')}</div><p class="ov-msg">${st}</p>${host ? `<div class="menu-grid"><button class="btn" data-act="bstart" ${all ? '' : 'disabled'}>ゲーム開始</button><button class="btn" data-act="bmaps">マップ選択へ</button></div>` : '<p class="ov-hint">ホストが開始するのを待っています…</p><button class="btn" id="ov-title">やめる</button>'}`);
+}
+
 /* ---------- マルチ: ホストが全部を計算し、ゲストは入力を送って映像を受け取る(WebRTC・接続コードを貼り合う) ---------- */
-function sendNet(o) { if (NET.dc && NET.dc.readyState === 'open') { try { NET.dc.send(JSON.stringify(o, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)); } catch (e) {} } }
+function sendNet(o, g) {
+  let str; try { str = JSON.stringify(o, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v); } catch (e) { return; }
+  const ds = NET.role === 'host' ? (g ? [g.dc] : NET.gs.map(x => x.open ? x.dc : null)) : [NET.dc];
+  for (const dc of ds) if (dc && dc.readyState === 'open') { try { dc.send(str); } catch (e) {} }
+}
+const DUMMY_IN = { ax: 0, ay: 0, mx: 0, my: 0, fcnt: 0, mcnt: 0, fdone: 0, mdone: 0 };
+const openGs = () => NET.gs.filter(g => g.open);
+const playersN = () => 1 + openGs().length;
+const remoteIn = p => { const g = NET.gs.find(x => x.idx === p.idx && x.open); return g ? g.rin : DUMMY_IN; };
+function newGuest() {
+  const g = { dc: null, open: false, idx: 0, rin: { ax: 0, ay: 0, mx: 0, my: 0, fcnt: 0, mcnt: 0, fdone: 0, mdone: 0 } };
+  NET.gs.push(g); if (NET.gs.length === 1) NET.rin = g.rin; return g;
+}
+function closeGuests() { NET.gs.forEach(g => { try { if (g.dc) g.dc.close(); } catch (e) {} }); NET.gs = []; NET.rin = { ax: 0, ay: 0, mx: 0, my: 0, fcnt: 0, mcnt: 0, fdone: 0, mdone: 0 }; }
 function netClose() {
   if (NET.open) sendNet({ t: 'bye' });
   try { if (NET.dc) NET.dc.close(); } catch (e) {} try { if (NET.pc) NET.pc.close(); } catch (e) {} try { if (NET.peer) NET.peer.destroy(); } catch (e) {}
-  NET.pc = NET.dc = NET.peer = null; NET.open = false; NET.role = null; NET.ev = []; NET.started = false;
+  closeGuests();
+  NET.pc = NET.dc = NET.peer = null; NET.open = false; NET.role = null; NET.ev = []; NET.started = false; NET.inGame = false; NET.code = null; NET.n = 2;
+  if (MODE === 'battle') MODE = 'standard';
 }
 function netLost() {
-  MP = false; TANDEM = false; TSWAP = false; ME = 0; NET.role = null; NET.open = false; NET.started = false; NET.ev = [];
+  MP = false; TANDEM = false; TSWAP = false; ME = 0; NET.role = null; NET.open = false; NET.started = false; NET.ev = []; NET.inGame = false; NET.code = null; MODE = 'standard';
+  closeGuests();
   try { if (NET.pc) NET.pc.close(); } catch (e) {} try { if (NET.peer) NET.peer.destroy(); } catch (e) {} NET.pc = NET.dc = NET.peer = null;
   state = 'title'; menuStep = 'lobby'; hideBanner(); keys.clear(); mouse.down = false; loadStage(0);
   lobbyPanel(`<h2 class="ov-title">接続が切れました</h2><button class="btn" id="ov-title">タイトルへ戻る</button>`);
 }
+function guestGone(g) {
+  const i = NET.gs.indexOf(g); if (i < 0) return;
+  const was = g.open; g.open = false; try { if (g.dc) g.dc.close(); } catch (e) {}
+  NET.open = openGs().length > 0;
+  if (NET.inGame && was) {
+    if (BT()) { const q = PL[g.idx]; if (q && q.alive) { q.alive = false; burst(q.x, q.y, COLOR.magic, 20, 200, 0.6); } if (!NET.open) netLost(); return; }
+    netLost(); return;
+  }
+  NET.gs.splice(i, 1);
+  NET.rin = (openGs()[0] || { rin: NET.rin }).rin;
+  if (was && NET.role === 'host') { sendNet({ t: 'toroom' }); showLobby(); sendLobby(); }
+}
+function sendLobby() { const gs = openGs(); gs.forEach((g, i) => sendNet({ t: 'lobby', me: i + 1, n: gs.length + 1 }, g)); }
 const packCode = d => btoa(JSON.stringify(d)), unpackCode = t => JSON.parse(atob(t.replace(/\s+/g, '')));
 function gatherDone(pc) {
   return new Promise(res => {
@@ -2533,22 +2699,39 @@ function gatherDone(pc) {
   });
 }
 function lobbyPanel(h) { showOverlay('<div class="menu-wrap">' + h + '</div>'); overlayEl.classList.add('title'); panelEl.classList.add('wide'); }
+function guestWait() {
+  state = 'title'; menuStep = 'lobby';
+  lobbyPanel(`<h2 class="ov-title">ルーム</h2><p class="ov-msg">参加者 ${NET.n || 2}/4 人 ・ あなたは ${ME + 1}P</p><p class="ov-hint">ホストがモードを選ぶのを待っています…</p><button class="btn" id="ov-title">やめる</button>`);
+}
 function showLobby() {
   state = 'title'; menuStep = 'lobby';
-  const back = `<button class="btn" data-act="back" data-v="players">もどる</button>`;
-  if (NET.open && NET.role === 'host') lobbyPanel(`<h2 class="ov-title">マルチ</h2><p class="ov-msg">ゲストと接続できています。</p><div class="menu-grid"><button class="btn" data-act="mpnext">つづける(難易度へ)</button>${back}</div>`);
-  else lobbyPanel(`<h2 class="ov-title">マルチ(2人・オンライン)</h2><div class="menu-grid"><button class="btn" data-act="lobby" data-v="peerhost">部屋を作る<small>4桁の部屋番号が出ます。相手に伝えるだけ</small></button><button class="btn" data-act="lobby" data-v="peerjoin">部屋に入る<small>相手の部屋番号を入力</small></button><button class="btn" data-act="lobby" data-v="host" style="opacity:.75">コードで接続(ホスト)<small>うまくつながらないとき用。接続コードを貼り合います</small></button><button class="btn" data-act="lobby" data-v="join" style="opacity:.75">コードで接続(ゲスト)<small>うまくつながらないとき用</small></button>${back}</div>`);
+  const back = `<button class="btn" data-act="back" data-v="mode">もどる</button>`;
+  if (NET.role === 'guest' && NET.open) { guestWait(); return; }
+  if (NET.role === 'host') {
+    const n = playersN(), two = n === 2;
+    lobbyPanel(`<h2 class="ov-title">ルーム</h2>${NET.code ? `<p class="ov-msg">部屋番号 <span class="room-code" style="font-size:28px">${NET.code}</span></p>` : ''}<p class="ov-msg">参加者 ${n}/4 人${n < 2 ? '(ゲストを待っています…)' : ''}</p><p class="ov-sub">あそぶモードを選んでください</p>
+      <div class="menu-grid">
+      <button class="btn" data-act="mpmode" data-v="twin" ${two ? '' : 'disabled'}><img src="${EVURI.m_twin}" width="48" height="48" style="display:block;margin:0 auto 4px"><span>ツイン・ユニット</span><small>2人プレイ・2機で並んで戦う${two ? '' : '(2人のときだけ)'}</small></button>
+      <button class="btn" data-act="mpmode" data-v="tandem" ${two ? '' : 'disabled'}><img src="${EVURI.m_tan}" width="48" height="48" style="display:block;margin:0 auto 4px"><span>タンデム・ユニット</span><small>2人プレイ・1機を2人で操縦${two ? '' : '(2人のときだけ)'}</small></button>
+      <button class="btn" data-act="mpmode" data-v="battle" ${n >= 2 ? '' : 'disabled'}><span>バトル</span><small>2〜4人・プレイヤー同士で対戦</small></button>
+      ${n < 4 ? `<button class="btn" data-act="lobby" data-v="host" style="opacity:.75">コードでゲストを追加<small>うまくつながらないとき用</small></button>` : ''}${back}</div>`);
+    return;
+  }
+  lobbyPanel(`<h2 class="ov-title">マルチプレイ(2〜4人・オンライン)</h2><div class="menu-grid"><button class="btn" data-act="lobby" data-v="peerhost">部屋を作る<small>4桁の部屋番号が出ます。相手に伝えるだけ</small></button><button class="btn" data-act="lobby" data-v="peerjoin">部屋に入る<small>相手の部屋番号を入力</small></button><button class="btn" data-act="lobby" data-v="host" style="opacity:.75">コードで接続(ホスト)<small>うまくつながらないとき用。接続コードを貼り合います</small></button><button class="btn" data-act="lobby" data-v="join" style="opacity:.75">コードで接続(ゲスト)<small>うまくつながらないとき用</small></button>${back}</div>`);
 }
 function codeBox(id, ro, val) { return `<textarea id="${id}" class="codebox" ${ro ? 'readonly' : ''} placeholder="${ro ? '' : 'ここにコードを貼り付け'}" spellcheck="false">${val || ''}</textarea>`; }
-function setupDC(dc) {
-  NET.dc = dc;
+function setupDC(dc, g) {
+  if (g) g.dc = dc; else NET.dc = dc;
   dc.onopen = () => {
-    NET.open = true; MP = true; ME = NET.role === 'guest' ? 1 : 0; NET.started = false;
-    if (NET.role === 'host') showLobby();
-    else lobbyPanel(`<h2 class="ov-title">接続できました</h2><p class="ov-msg">ホストがゲームを始めるのを待っています…</p><button class="btn" id="ov-title">やめる</button>`);
+    if (g) {
+      if (NET.inGame) { try { dc.close(); } catch (e) {} const k = NET.gs.indexOf(g); if (k >= 0) NET.gs.splice(k, 1); return; }
+      g.open = true; NET.open = true; MP = true; ME = 0; NET.started = false; NET.rin = openGs()[0].rin;
+      NET.gs.forEach(x => { if (x !== g && x.open) sendNet({ t: 'toroom' }, x); });
+      showLobby(); sendLobby();
+    } else { NET.open = true; MP = true; ME = 1; NET.started = false; guestWait(); }
   };
-  dc.onclose = () => { if (NET.open) netLost(); };
-  dc.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onNetMsg(m); };
+  dc.onclose = () => { if (g) guestGone(g); else if (NET.open) netLost(); };
+  dc.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onNetMsg(m, g); };
 }
 const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 const PEER_OPTS = () => Object.assign({ config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } }, window.__peerOpts || {});
@@ -2563,19 +2746,19 @@ function peerWrap(conn) {   // PeerJSの接続を、WebRTCのデータチャン�
 const roomId = c => 'lastunit-' + c;
 function peerHost(tries) {
   netClose(); NET.role = 'host';
-  const code = String(Math.floor(1000 + Math.random() * 9000));
-  lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">部屋を準備しています…</p><div class="menu-grid"><button class="btn" data-act="back" data-v="players">もどる</button></div>`);
-  let pr; try { pr = new Peer(roomId(code), PEER_OPTS()); } catch (e) { lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">うまく始められませんでした</p><div class="menu-grid"><button class="btn" data-act="back" data-v="players">もどる</button></div>`); return; }
+  const code = String(Math.floor(1000 + Math.random() * 9000)); NET.code = code;
+  lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">部屋を準備しています…</p><div class="menu-grid"><button class="btn" data-act="back" data-v="mode">もどる</button></div>`);
+  let pr; try { pr = new Peer(roomId(code), PEER_OPTS()); } catch (e) { lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">うまく始められませんでした</p><div class="menu-grid"><button class="btn" data-act="back" data-v="mode">もどる</button></div>`); return; }
   NET.peer = pr;
-  pr.on('open', () => lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">この部屋番号を相手に伝えてください</p><div class="room-code">${code}</div><p class="ov-hint">相手が入ると、自動でつながります…</p><div class="menu-grid"><button class="btn" data-act="back" data-v="players">もどる</button></div>`));
-  pr.on('connection', conn => { if (NET.dc) { try { conn.close(); } catch (e) {} return; } setupDC(peerWrap(conn)); });
+  pr.on('open', () => lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">この部屋番号を相手に伝えてください</p><div class="room-code">${code}</div><p class="ov-hint">相手が入ると、自動でつながります…</p><div class="menu-grid"><button class="btn" data-act="back" data-v="mode">もどる</button></div>`));
+  pr.on('connection', conn => { if (NET.inGame || openGs().length >= 3) { try { conn.close(); } catch (e) {} return; } setupDC(peerWrap(conn), newGuest()); });
   pr.on('error', e => {
     if (e.type === 'unavailable-id' && (tries || 0) < 5) { peerHost((tries || 0) + 1); return; }
-    lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">うまくつながりませんでした(${e.type})。ネットワークをご確認ください。</p><div class="menu-grid"><button class="btn" data-act="lobby" data-v="peerhost">もう一度</button><button class="btn" data-act="back" data-v="players">もどる</button></div>`);
+    lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">うまくつながりませんでした(${e.type})。ネットワークをご確認ください。</p><div class="menu-grid"><button class="btn" data-act="lobby" data-v="peerhost">もう一度</button><button class="btn" data-act="back" data-v="mode">もどる</button></div>`);
   });
 }
 function peerJoinPanel(msg) {
-  lobbyPanel(`<h2 class="ov-title">部屋に入る</h2><p class="ov-msg">ホストの部屋番号(4桁)を入力</p><input id="room-in" class="room-in" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000" value="${(window.__roomVal || '')}"><p class="ov-hint" id="net-msg">${msg || ''}</p><div class="menu-grid"><button class="btn" data-act="lobby" data-v="peergo">入る</button><button class="btn" data-act="back" data-v="players">もどる</button></div>`);
+  lobbyPanel(`<h2 class="ov-title">部屋に入る</h2><p class="ov-msg">ホストの部屋番号(4桁)を入力</p><input id="room-in" class="room-in" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000" value="${(window.__roomVal || '')}"><p class="ov-hint" id="net-msg">${msg || ''}</p><div class="menu-grid"><button class="btn" data-act="lobby" data-v="peergo">入る</button><button class="btn" data-act="back" data-v="mode">もどる</button></div>`);
   const ri = $('room-in'); if (ri) { ri.focus(); ri.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') netLobbyAct('peergo'); }); ri.addEventListener('input', () => { ri.value = ri.value.replace(/\D/g, '').slice(0, 4); }); }
 }
 function peerGo() {
@@ -2595,14 +2778,14 @@ async function netLobbyAct(v) {
   if (v === 'peergo') { peerGo(); return; }
   try {
     if (v === 'host') {
-      netClose(); NET.role = 'host';
+      if (NET.role !== 'host') { netClose(); NET.role = 'host'; }
       lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">接続コードを作っています…</p>`);
-      const pc = NET.pc = new RTCPeerConnection(RTC_CFG); setupDC(pc.createDataChannel('g'));
+      const pc = NET.pc = new RTCPeerConnection(RTC_CFG); setupDC(pc.createDataChannel('g'), newGuest());
       await pc.setLocalDescription(await pc.createOffer()); await gatherDone(pc);
       lobbyPanel(`<h2 class="ov-title">部屋を作る</h2>
         <p class="ov-msg">① このコードをゲストに送る</p>${codeBox('code-out', true, packCode(pc.localDescription))}<button class="btn" data-act="lobby" data-v="copy">コピー</button>
         <p class="ov-msg">② ゲストから届いた返信コードを貼る</p>${codeBox('code-in', false)}
-        <div class="menu-grid"><button class="btn" data-act="lobby" data-v="hostgo">接続する</button><button class="btn" data-act="back" data-v="players">もどる</button></div><p class="ov-hint" id="net-msg"></p>`);
+        <div class="menu-grid"><button class="btn" data-act="lobby" data-v="hostgo">接続する</button><button class="btn" data-act="back" data-v="mpback">もどる</button></div><p class="ov-hint" id="net-msg"></p>`);
     } else if (v === 'hostgo') {
       const t = $('code-in').value; if (!t.trim()) return;
       $('net-msg').textContent = '接続中…';
@@ -2610,13 +2793,13 @@ async function netLobbyAct(v) {
     } else if (v === 'join') {
       netClose(); NET.role = 'guest'; ME = 1;
       lobbyPanel(`<h2 class="ov-title">部屋に入る</h2><p class="ov-msg">ホストの接続コードを貼る</p>${codeBox('code-in', false)}
-        <div class="menu-grid"><button class="btn" data-act="lobby" data-v="joingo">返信コードを作る</button><button class="btn" data-act="back" data-v="players">もどる</button></div>`);
+        <div class="menu-grid"><button class="btn" data-act="lobby" data-v="joingo">返信コードを作る</button><button class="btn" data-act="back" data-v="mode">もどる</button></div>`);
     } else if (v === 'joingo') {
       const t = $('code-in').value; if (!t.trim()) return;
       const pc = NET.pc = new RTCPeerConnection(RTC_CFG); pc.ondatachannel = e => setupDC(e.channel);
       await pc.setRemoteDescription(unpackCode(t)); await pc.setLocalDescription(await pc.createAnswer()); await gatherDone(pc);
       lobbyPanel(`<h2 class="ov-title">部屋に入る</h2><p class="ov-msg">この返信コードをホストに送ってください</p>${codeBox('code-out', true, packCode(pc.localDescription))}<button class="btn" data-act="lobby" data-v="copy">コピー</button>
-        <p class="ov-hint">ホストが貼ると自動でつながります…</p><button class="btn" data-act="back" data-v="players">もどる</button>`);
+        <p class="ov-hint">ホストが貼ると自動でつながります…</p><button class="btn" data-act="back" data-v="mode">もどる</button>`);
     } else if (v === 'copy') {
       const b = $('code-out'); b.select(); try { await navigator.clipboard.writeText(b.value); } catch (e) { document.execCommand('copy'); }
     }
@@ -2636,7 +2819,7 @@ function netSnap() {
   const s = { t: 's', sw: TSWAP ? 1 : 0, ld: NET.ld, st: state, sT: stateT, si: stageIdx, go: gateOpened, gt: gateOpenT, et: entryT, gf: gateFade, sh: shake,
     p: PL.map(q => [q.x, q.y, q.ang, q.alive ? 1 : 0]), e: enemies.map(e => clone(e, 0)),
     m: missiles.map(m => { const r = clone(m, 0); r.o = ownerIdx(m); return r; }), mi: mines.map(m => { const r = clone(m, 0); r.o = ownerIdx(m); return r; }),
-    g: grenades.map(g => { const r = clone(g, 0); r.o = ownerIdx(g); return r; }),
+    g: grenades.map(g => { const r = clone(g, 0); r.o = ownerIdx(g); return r; }), bt: (BT() && BATTLE) ? { r: BATTLE.round, s: BATTLE.score } : 0,
     l: lasers.map(l => ({ pts: l.pts.map(a => [a.x, a.y]), t: l.t, dur: l.dur, side: l.side })), b: blasts.map(b => clone(b, 0)), ev: NET.ev };
   const gs = grid.map(r => r.join('')).join('|'); if (gs !== NET.gridStr) { s.gr = gs; NET.gridStr = gs; }
   if (wrecks.length !== NET.wrLen) { s.wr = wrecks.map(w => clone(w, 0)); NET.wrLen = wrecks.length; }
@@ -2647,21 +2830,35 @@ function hostTick(dt) {
   NET.sendT += dt;
   if (NET.sendT >= 1 / 30) { NET.sendT = 0; sendNet(netSnap()); NET.ev = []; }
 }
-function onNetMsg(m) {
+function onNetMsg(m, g) {
   if (NET.role === 'host') {
-    if (m.t === 'in') { const r = NET.rin; r.ax = m.ax; r.ay = m.ay; r.mx = m.mx; r.my = m.my; r.fcnt = m.f; r.mcnt = m.m; }
-    else if (m.t === 'bye') netLost();
+    if (!g) return;
+    if (m.t === 'in') { const r = g.rin; r.ax = m.ax; r.ay = m.ay; r.mx = m.mx; r.my = m.my; r.fcnt = m.f; r.mcnt = m.m; }
+    else if (m.t === 'bye') guestGone(g);
+    else if (m.t === 'kit') {
+      const i = openGs().indexOf(g) + 1;
+      if (BSEL && i > 0 && i < BSEL.k.length) { BSEL.k[i] = Math.max(0, Math.min(KITS.length - 1, m.k | 0)); BSEL.r[i] = true; sendNet({ t: 'kits', k: BSEL.k, r: BSEL.r }); if (menuStep === 'bkit') showKitSelect(); }
+    }
     return;
   }
   if (m.t === 'start') {
-    DIFF = DIFFS.find(d => d.key === m.diff) || DIFFS[1]; MODE = m.mode; MP = true; ME = 1; menuStep = null; TANDEM = !!m.td; TSWAP = false;
+    DIFF = DIFFS.find(d => d.key === m.diff) || DIFFS[1]; MODE = m.mode; MP = true; ME = m.me !== undefined ? m.me : 1; menuStep = null; TANDEM = !!m.td; TSWAP = false;
+    if (m.mode === 'battle') { BATTLE = { n: m.n, kits: m.kits, score: Array(m.n).fill(0), round: 0, target: 3, map: m.map, last: -1 }; dropCustom(); STAGES.push({ name: m.map.name, custom: true, theme: m.map.theme, hint: '', boss: false, grid: m.map.grid }); }
     CFG.player.maxShots = shotCap(); rebuildShotPips();
     NET.started = true; NET.gld = -1; hudKey = ''; hideOverlay();
   } else if (m.t === 's') applySnap(m);
+  else if (m.t === 'lobby') { ME = m.me; NET.n = m.n; if (!NET.started && menuStep === 'lobby') guestWait(); }
+  else if (m.t === 'toroom') {
+    NET.started = false; MODE = 'standard'; TANDEM = false; hideBanner(); dropCustom(); state = 'title';
+    const mp = MP; MP = false; loadStage(0); MP = mp; guestWait();
+  }
+  else if (m.t === 'bsel') { BSEL = { map: m.map, k: m.k, r: m.r }; MODE = 'battle'; showKitSelect(); }
+  else if (m.t === 'kits') { if (BSEL) { BSEL.k = m.k; BSEL.r = m.r; if (menuStep === 'bkit') showKitSelect(); } }
   else if (m.t === 'bye') netLost();
 }
 function applySnap(m) {
   if (!NET.started) return;
+  if (m.bt && BATTLE) { BATTLE.round = m.bt.r; BATTLE.score = m.bt.s; }
   if (m.si !== stageIdx || m.ld !== NET.gld) { loadStage(m.si, true); NET.gld = m.ld; }
   if (!!m.sw !== TSWAP) { TSWAP = !!m.sw; hudKey = ''; }
   state = m.st; stateT = m.sT; gateOpened = !!m.go; gateOpenT = m.gt; entryT = m.et; gateFade = m.gf; shake = m.sh;
@@ -2682,7 +2879,7 @@ function applySnap(m) {
       else if (ev[0] === 's') sfx(ev[1]);
       else if (ev[0] === 'bn') showBannerRaw(ev[1], ev[2], '');
       else if (ev[0] === 'bh') hideBanner();
-      else if (ev[0] === 'ov') { showOverlay(ev[1]); }
+      else if (ev[0] === 'ov') { showOverlay(ev[1]); if (NET.role === 'guest') panelEl.querySelectorAll('[data-host]').forEach(n => { n.style.display = 'none'; }); }
       else if (ev[0] === 'oh') hideOverlay();
       else if (ev[0] === 'rt') showRoleToast(ev[1]);
     } catch (e) { /* 演出は無くても進行する */ }
@@ -2704,7 +2901,8 @@ function updateGuest(dt) {
   }
 }
 /* 2Pの機体: 1Pの絵の色相をずらして緑にする */
-function buildP2() {
+function buildP2(dh) {
+  dh = dh === undefined ? -65 : dh;
   const S = SPR.player; if (!S.ok) return null;
   const frames = S.frames.map(f => {
     const c = document.createElement('canvas'); c.width = f.img.naturalWidth || f.w; c.height = f.img.naturalHeight || f.h;
@@ -2715,7 +2913,7 @@ function buildP2() {
       if (dl < 0.08) continue;
       const sat = dl / (1 - Math.abs(2 * l - 1) + 1e-6); let h = mx === r ? ((gg - b) / dl) % 6 : mx === gg ? (b - r) / dl + 2 : (r - gg) / dl + 4; h = (h * 60 + 360) % 360;
       if (h < 150 || h > 260) continue;   // 青〜シアン系だけを緑へ
-      h = (h - 65 + 360) % 360;
+      h = (h + dh + 360) % 360;
       const cc = (1 - Math.abs(2 * l - 1)) * sat, x = cc * (1 - Math.abs((h / 60) % 2 - 1)), mm = l - cc / 2;
       const [r2, g2, b2] = h < 60 ? [cc, x, 0] : h < 120 ? [x, cc, 0] : h < 180 ? [0, cc, x] : h < 240 ? [0, x, cc] : h < 300 ? [x, 0, cc] : [cc, 0, x];
       a[i] = (r2 + mm) * 255; a[i + 1] = (g2 + mm) * 255; a[i + 2] = (b2 + mm) * 255;
@@ -2885,22 +3083,31 @@ function edValid() {
   if (!/[0-9A-D]/.test(flat)) return '敵を1体以上置いてください';
   return '';
 }
-function playCustom() {
+let TESTDIFF = null;   // クリエイトのテストプレイで最後に選んだ難易度
+function playCustom(quick) {
   dropCustom(); const m = edToSave(), hasBoss = m.grid.some(r => /[BCD]/.test(r));
   STAGES.push({ name: m.name, custom: true, theme: m.theme, hint: '', boss: hasBoss, grid: m.grid, crazy: m.crazy || undefined });
-  startIdx = STAGES.length - 1; MODE = 'create'; MP = false; showMenu('diff');
+  startIdx = STAGES.length - 1; MODE = 'create'; MP = false;
+  if (quick) { DIFF = TESTDIFF || DIFFS[1]; begin(); } else showMenu('diff');   // エディタからのテストは、難易度の選択を飛ばしてその場で始める
 }
 function exportJson(list) { return JSON.stringify({ version: 5, stages: list.map(m => ({ name: m.name, theme: m.theme || 0, grid: m.grid, crazy: m.crazy ? m.crazy.join('\n') : '' })) }); }
 function createAct(a, v) {
-  if (a === 'new') { ED = newEd(30, 15); EDI = -1; showEditor(); }
-  else if (a === 'edit') { ED = edFromSave(loadMaps()[+v]); EDI = +v; showEditor(); }
+  if (a === 'new') { ED = newEd(30, 15); EDI = -1; ED.snap = JSON.stringify(edToSave()); showEditor(); }
+  else if (a === 'edit') { ED = edFromSave(loadMaps()[+v]); EDI = +v; ED.snap = JSON.stringify(edToSave()); showEditor(); }
   else if (a === 'play') { ED = edFromSave(loadMaps()[+v]); EDI = +v; playCustom(); }
   else if (a === 'del') { const m = loadMaps()[+v]; if (!m) return; lobbyPanel(`<h2 class="ov-title">削除の確認</h2><p class="ov-msg">「${esc(m.name)}」を削除します。元には戻せません。よろしいですか？</p><div class="menu-grid"><button class="btn" data-act="cr-delyes" data-v="${+v}">削除する</button><button class="btn" data-act="back" data-v="cmenu">やめる</button></div>`); }
   else if (a === 'delyes') { const m = loadMaps(); m.splice(+v, 1); saveMaps(m); showMenu('cmenu'); }
-  else if (a === 'back') { ED = null; showMenu('cmenu'); }
+  else if (a === 'back') {
+    if (ED && ED.snap !== JSON.stringify(edToSave())) {
+      lobbyPanel(`<h2 class="ov-title">保存していません</h2><p class="ov-msg">編集中のマップはまだ保存されていません。このまま戻ると、変更は失われます。</p><div class="menu-grid"><button class="btn" data-act="cr-backsave">保存して戻る</button><button class="btn" data-act="cr-backyes">保存せずに戻る</button><button class="btn" data-act="cr-backno">編集を続ける</button></div>`);
+    } else { ED = null; showMenu('cmenu'); }
+  }
+  else if (a === 'backsave') { const m = loadMaps(), sv = edToSave(); if (EDI >= 0 && m[EDI]) m[EDI] = sv; else m.push(sv); if (saveMaps(m)) { ED = null; showMenu('cmenu'); } else { const u = EDU; showEditor(); EDU = u; edMsg('保存できませんでした(ブラウザの保存が使えません)'); } }
+  else if (a === 'backyes') { ED = null; showMenu('cmenu'); }
+  else if (a === 'backno') { const u = EDU; showEditor(); EDU = u; }
   else if (a === 'undo') edUndo();
-  else if (a === 'save') { const m = loadMaps(), sv = edToSave(); if (EDI >= 0 && m[EDI]) m[EDI] = sv; else { m.push(sv); EDI = m.length - 1; } edMsg(saveMaps(m) ? '保存しました' : '保存できませんでした(ブラウザの保存が使えません)'); }
-  else if (a === 'test') { const er = edValid(); if (er) { edMsg(er); return; } playCustom(); }
+  else if (a === 'save') { const m = loadMaps(), sv = edToSave(); if (EDI >= 0 && m[EDI]) m[EDI] = sv; else { m.push(sv); EDI = m.length - 1; } const ok = saveMaps(m); if (ok) ED.snap = JSON.stringify(sv); edMsg(ok ? '保存しました' : '保存できませんでした(ブラウザの保存が使えません)'); }
+  else if (a === 'test') { const er = edValid(); if (er) { edMsg(er); return; } playCustom(true); }
   else if (a === 'export') { lobbyPanel(`<h2 class="ov-title">書き出し</h2><p class="ov-msg">このJSONを保存しておくと、あとで「読み込み」で戻せます</p>${codeBox('code-out', true, esc(exportJson([edToSave()])))}<div class="menu-grid"><button class="btn" data-act="cr-copy">コピー</button><button class="btn" data-act="back" data-v="crback">もどる</button></div>`); }
   else if (a === 'copy') { const b = $('code-out'); b.select(); try { navigator.clipboard.writeText(b.value); } catch (e) { document.execCommand('copy'); } }
   else if (a === 'import') { state = 'title'; menuStep = 'cmenu'; lobbyPanel(`<h2 class="ov-title">読み込み</h2><p class="ov-msg">マップメーカーのJSONを貼ってください</p>${codeBox('code-in', false)}<div class="menu-grid"><button class="btn" data-act="cr-doimport">読み込む</button><button class="btn" data-act="back" data-v="crback">もどる</button></div><p class="ov-hint" id="net-msg"></p>`); }
@@ -2922,7 +3129,7 @@ const evoFresh = () => ({ gun: 0, ct: 0, bar: 0, ref: 0, spd: 0, cnt: 0, vel: 0,
 let EVO = evoFresh(), EVOstart = null, pickups = [], floaters = [];
 const EVCAP = { gun: 3, ct: 10, bar: 3, ref: 4, spd: 10, cnt: 9, vel: 10 }, EVNAME = { gun: '自動小銃', ct: 'CT短縮', bar: 'バリア', ref: '反射', spd: '機動', cnt: '同時弾数', vel: '弾速' };   // cnt は3pt=同時弾+1
 const EVCOL = { ref: '#8af0ff', spd: '#6bffb0', cnt: '#ffd24a', vel: '#ff9ad0', w: '#ffffff' };
-const WNAME = { mine: 'プラズママイン', shot: 'パルスショット', laser: 'プラズマレイ', grenade: 'グレネード', missile: 'ミサイル' };
+const WNAME = { rmissile: '反射ミサイル', mine: 'プラズママイン', shot: 'パルスショット', laser: 'プラズマレイ', grenade: 'グレネード', missile: 'ミサイル' };
 const EVKINDS = ['spd', 'cnt', 'vel', 'ct'], EVORDER = ['turret', 'walker', 'missiler', 'burster', 'layer', 'bouncer', 'rusher', 'lobber', 'gazer', 'trident', 'heavy'];
 function evoApply() { CFG.player.maxShots = shotCap() + (isEvo() ? Math.floor(EVO.cnt / 3) : 0); rebuildShotPips(); }
 function evoSnap() { EVOstart = JSON.parse(JSON.stringify(EVO)); }
@@ -3073,4 +3280,3 @@ setInterval(() => {
 }, 50);
 })();
 </script>
-
