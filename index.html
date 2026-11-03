@@ -178,7 +178,7 @@ h1{margin:0;font-family:var(--font-display);font-weight:800;font-size:clamp(24px
     <div class="key"><span class="cap">WASD / 矢印</span><span>移動</span></div>
     <div class="key"><span class="cap">マウス</span><span>照準(カーソルの方向へ撃つ)</span></div>
     <div class="key"><span class="cap">左クリック</span><span>パルスショット(0.5秒に1発回復・1クリック1発、同時5発(クレイジー以上は3発、マルチは各自3発・クレイジー以上は2発、マインは各自1個)、壁で1回反射)</span></div>
-    <div class="key"><span class="cap">タンデム</span><span>1機を2人で操縦。席A=横移動(A/D)+照準(マウス)、席B=縦移動(W/S)+攻撃(クリック/右クリック)。区画クリアごとに交代</span></div>
+    <div class="key" id="key-tandem" style="display:none"><span class="cap">タンデム</span><span>1機を2人で操縦。席A=横移動(A/D)+照準(マウス)、席B=縦移動(W/S)+攻撃(クリック/右クリック)。区画クリアごとに交代</span></div>
     <div class="key"><span class="cap">右クリック / Space</span><span>プラズママイン(同時2個、10秒で爆発)。エヴォルヴではサブ武器で、レーザーは長押しで射線を表示→離して発射</span></div>
     <div class="key"><span class="cap">P</span><span>一時停止</span></div>
     <div class="key"><span class="cap">R</span><span>区画をやり直す</span></div>
@@ -1912,7 +1912,7 @@ function drawCrack(tx, ty, now) {   // 壊せる壁: 面全体にひび割れが
   const CK = NEON[Math.max(0, THEMES.indexOf(THEME))] || CK, px = tx * T, py = ty * T, cx = px + T / 2, cy = py + T / 2, seed = tx * 31 + ty * 17;
   const pu = 0.75 + 0.25 * Math.sin(now * 2.6 + seed);
   ctx.save(); ctx.beginPath(); ctx.rect(px, py, T, T); ctx.clip();
-  ctx.fillStyle = 'rgba(0,4,12,0.5)'; ctx.fillRect(px, py, T, T);   // 傷んで暗くなった面
+  
   const bolts = [];
   for (let k = 0; k < 5; k++) {   // 中心付近から縁へ向かう割れ目と、そこから枝分かれ
     let a = (k / 5) * Math.PI * 2 + (rnd(seed + k * 3.7) - 0.5) * 0.9, x = cx + (rnd(seed + k) - 0.5) * 6, y = cy + (rnd(seed + k + 9) - 0.5) * 6;
@@ -1922,10 +1922,9 @@ function drawCrack(tx, ty, now) {   // 壊せる壁: 面全体にひび割れが
   }
   const path = () => { for (const pts of bolts) { ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); } };
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#02050a'; ctx.lineWidth = 4.2; ctx.globalAlpha = 0.85; ctx.beginPath(); path(); ctx.stroke();   // 割れ目の影
-  ctx.shadowColor = CK; ctx.shadowBlur = 7; ctx.strokeStyle = CK; ctx.lineWidth = 2; ctx.globalAlpha = 0.9 * pu; ctx.beginPath(); path(); ctx.stroke();   // 熱で光る割れ目
-  ctx.shadowBlur = 0; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.85 * pu; ctx.beginPath(); path(); ctx.stroke();   // 芯
-  ctx.globalAlpha = 0.35 * pu; ctx.fillStyle = CK; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();   // 割れの中心のくすぶり
+  ctx.strokeStyle = '#02050a'; ctx.lineWidth = 3.2; ctx.globalAlpha = 0.7; ctx.beginPath(); path(); ctx.stroke();   // 割れ目の影
+  ctx.shadowColor = CK; ctx.shadowBlur = 3; ctx.strokeStyle = CK; ctx.lineWidth = 1.3; ctx.globalAlpha = 0.6 * pu; ctx.beginPath(); path(); ctx.stroke();   // 熱で光る割れ目
+  
   ctx.restore();
 }
 function drawFence(tx, ty) {
@@ -1993,7 +1992,7 @@ function drawWalls(now) {
       ctx.fillStyle = WALLTHEME[THEMES.indexOf(THEME)] || WALLTEX.pat; ctx.fillRect(px, py, T, T);
       ctx.fillStyle = 'rgba(6,10,22,' + (WALLDIM[THEMES.indexOf(THEME)] || 0.3) + ')'; ctx.fillRect(px, py, T, T);   // 暗い床になじむよう、壁を少し沈める(白い壁は強め)
       const HI = THEME.hi, LO = '#0b1220', NE = NEON[Math.max(0, THEMES.indexOf(THEME))] || HI;
-      const pu = (0.82 + 0.18 * Math.sin(now * 2.2 + (x * 1.7 + y * 2.3))) * (v === 2 ? 0.5 : 1);   // ネオンのゆるい明滅
+      const pu = (0.82 + 0.18 * Math.sin(now * 2.2 + (x * 1.7 + y * 2.3)));   // ネオンのゆるい明滅(壊せる壁も周りの壁と同じ)
       ctx.fillStyle = NE;
       ctx.globalAlpha = 0.16 * pu;   // 外側のにじみ(縁の内側へ)
       if (up) ctx.fillRect(px, py, T, 9);
@@ -2304,7 +2303,7 @@ function draw(now) {
   if (state === 'edit') edOverlay(now);
   ctx.restore();
   if (gateFade > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1, gateFade)})`; ctx.fillRect(0, 0, W, H); }
-  if ($('overlay').hidden && state !== 'gate' && state !== 'edit') drawCrosshair();
+  if ($('overlay').hidden && state !== 'gate' && state !== 'edit' && (!TANDEM || (ME === 0) === !TSWAP)) drawCrosshair();   // タンデムは、照準の席の人にだけ照準マークを出す
 }
 
 /* ---------- DOM(HUD・バナー・オーバーレイ) ---------- */
@@ -2319,6 +2318,7 @@ rebuildShotPips();
 makePips($('p-mine'), CFG.mine.max, 'round');
 let hudKey = '';
 function updateHud() {
+  { const kt = $('key-tandem'), v = TANDEM ? '' : 'none'; if (kt && kt.style.display !== v) kt.style.display = v; }
   const me = PL[ME] || P;
   let pm = me.ammo !== undefined ? Math.floor(me.ammo + 1e-6) : CFG.player.maxShots - countMagic(me, 'shot'), mm = (TW() ? 1 : CFG.mine.max) - countMines(me);
   if (BT()) { const K = KITS[me.kit || 0]; pm = K.main.n - mainCount(me, K.main.kind); mm = K.sub.n - subCount(me); }
@@ -2382,7 +2382,7 @@ function showMenu(step) {
   } else if (step === 'cmenu') {
     const maps = loadMaps();
     h = `<h2 class="ov-title">クリエイト</h2><div class="menu-grid cr-list"><button class="btn" data-act="cr-new">新しいマップを作る</button>
-      ${maps.map((m, i) => `<div class="cr-row"><span>${esc(m.name)}<small>${m.grid[0].length}×${m.grid.length}</small></span><button class="btn" data-act="cr-play" data-v="${i}">あそぶ</button><button class="btn" data-act="cr-edit" data-v="${i}">編集</button><button class="btn" data-act="cr-del" data-v="${i}">削除</button></div>`).join('')}
+      ${maps.map((m, i) => `<div class="cr-row"><span>${esc(m.name)}<small>${m.type === 'battle' ? 'バトル ' : 'インベイド '}${m.grid[0].length}×${m.grid.length}</small></span>${m.type === 'battle' ? '' : `<button class="btn" data-act="cr-play" data-v="${i}">あそぶ</button>`}<button class="btn" data-act="cr-edit" data-v="${i}">編集</button><button class="btn" data-act="cr-del" data-v="${i}">削除</button></div>`).join('')}
       <button class="btn" data-act="cr-import">読み込み(JSON)</button><button class="btn" data-act="back" data-v="title">もどる</button></div>`;
   } else if (step === 'pstage') {
     h = `<h2 class="ov-title">区画選択</h2><div class="menu-grid stage-grid">${STAGES.map((_, i) => i <= REACH ? `<button class="btn" data-act="pstage" data-v="${i}">${stageLabel(i)}<small>${STAGES[i].name || ''}</small></button>` : `<button class="btn" disabled>${stageLabel(i)}<small>未到達</small></button>`).join('')}
@@ -2638,7 +2638,7 @@ function battleToRoom() {
 }
 function showBattleMaps() {
   state = 'title'; menuStep = 'bmap';
-  BM_LIST = BATTLE_MAPS.map(m => ({ name: m.name, theme: m.theme, grid: m.grid, src: 'preset' })).concat(loadMaps().filter(m => m.grid && m.grid.length).map(m => ({ name: m.name, theme: m.theme || 0, grid: m.grid, src: 'custom' })));
+  BM_LIST = BATTLE_MAPS.map(m => ({ name: m.name, theme: m.theme, grid: m.grid, src: 'preset' })).concat(loadMaps().filter(m => m.grid && m.grid.length && m.type === 'battle').map(m => ({ name: m.name, theme: m.theme || 0, grid: m.grid, src: 'custom' })));
   lobbyPanel(`<h2 class="ov-title">マップ選択</h2><div class="menu-grid cr-list">${BM_LIST.map((m, i) => `<button class="btn" data-act="bmap" data-v="${i}">${esc(m.name)}<small>${m.src === 'custom' ? '自作マップ ' : 'バトルマップ '}${m.grid[0].length}×${m.grid.length}</small></button>`).join('')}<button class="btn" data-act="back" data-v="mpback">もどる</button></div>`);
 }
 function showKitSelect() {
@@ -2750,7 +2750,7 @@ function peerHost(tries) {
   lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">部屋を準備しています…</p><div class="menu-grid"><button class="btn" data-act="back" data-v="mode">もどる</button></div>`);
   let pr; try { pr = new Peer(roomId(code), PEER_OPTS()); } catch (e) { lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">うまく始められませんでした</p><div class="menu-grid"><button class="btn" data-act="back" data-v="mode">もどる</button></div>`); return; }
   NET.peer = pr;
-  pr.on('open', () => lobbyPanel(`<h2 class="ov-title">部屋を作る</h2><p class="ov-msg">この部屋番号を相手に伝えてください</p><div class="room-code">${code}</div><p class="ov-hint">相手が入ると、自動でつながります…</p><div class="menu-grid"><button class="btn" data-act="back" data-v="mode">もどる</button></div>`));
+  pr.on('open', () => { if (NET.peer === pr) showLobby(); });   // 部屋ができたら、そのままルーム画面へ
   pr.on('connection', conn => { if (NET.inGame || openGs().length >= 3) { try { conn.close(); } catch (e) {} return; } setupDC(peerWrap(conn), newGuest()); });
   pr.on('error', e => {
     if (e.type === 'unavailable-id' && (tries || 0) < 5) { peerHost((tries || 0) + 1); return; }
@@ -2930,20 +2930,21 @@ let ED = null, EDI = -1;
 function dropCustom() { while (STAGES.length && STAGES[STAGES.length - 1].custom) STAGES.pop(); }
 function loadMaps() { try { const a = JSON.parse(localStorage.getItem('lu_maps') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
 function saveMaps(a) { try { localStorage.setItem('lu_maps', JSON.stringify(a)); return true; } catch (e) { return false; } }
-function newEd(cols, rows) {
+function newEd(cols, rows, type) {
   const g = [], c = [];
   for (let y = 0; y < rows; y++) { g.push(Array.from({ length: cols }, (_, x) => (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) ? '#' : '.')); c.push(Array(cols).fill('.')); }
+  if (type === 'battle') { g[1][1] = 'P'; g[1][cols - 2] = 'M'; g[rows - 2][1] = 'Q'; g[rows - 2][cols - 2] = 'R'; return { name: '新しいバトルマップ', type, cols, rows, theme: 1, g, c, layer: 'n', tool: '#' }; }
   g[Math.floor(rows / 2)][1] = 'P'; g[Math.floor(rows / 2)][0] = '<'; g[Math.floor(rows / 2)][cols - 1] = '>';
-  return { name: '新しいマップ', cols, rows, theme: 0, g, c, layer: 'n', tool: '#' };
+  return { name: '新しいマップ', type: 'invade', cols, rows, theme: 0, g, c, layer: 'n', tool: '#' };
 }
 function edFromSave(m) {
   const rows = m.grid.length, cols = Math.max(...m.grid.map(r => r.length));
   const g = m.grid.map(r => [...r.padEnd(cols, '#')]), c = Array.from({ length: rows }, (_, y) => [...((m.crazy && m.crazy[y]) || '').padEnd(cols, '.')]);
-  return { name: m.name || 'マップ', cols, rows, theme: m.theme || 0, g, c, layer: 'n', tool: '#' };
+  return { name: m.name || 'マップ', type: m.type === 'battle' ? 'battle' : 'invade', cols, rows, theme: m.theme || 0, g, c, layer: 'n', tool: '#' };
 }
 function edToSave() {
   const e = ED;
-  return { name: e.name, theme: e.theme, grid: e.g.map(r => r.join('')), crazy: e.c.some(r => r.some(ch => ch !== '.')) ? e.c.map(r => r.join('')) : null };
+  return { name: e.name, type: e.type === 'battle' ? 'battle' : 'invade', theme: e.theme, grid: e.g.map(r => r.join('')), crazy: e.c.some(r => r.some(ch => ch !== '.')) ? e.c.map(r => r.join('')) : null };
 }
 function edResize(cols, rows) {
   const o = ED, n = newEd(cols, rows);
@@ -2954,6 +2955,8 @@ function edResize(cols, rows) {
   n.name = o.name; n.theme = o.theme; n.layer = o.layer; n.tool = o.tool; ED = n;
 }
 const PAL = [['.', '床'], ['#', '壁'], ['%', '壊せる壁'], ['=', '柵'], ['1', '①'], ['2', '②'], ['3', '③'], ['4', '④'], ['5', '⑤'], ['6', '⑥'], ['7', '⑦'], ['8', '⑧'], ['9', '⑨'], ['0', '⑩'], ['A', '⑪'], ['B', 'ボスA(3×3)'], ['C', 'ボスB(3×3)'], ['D', 'ボスC(3×3)'], ['P', 'ソロ位置'], ['M', '1P位置'], ['Q', '2P位置'], ['<', '入口'], ['>', '出口']];
+const BPAL = [['.', '床'], ['#', '壁'], ['%', '壊せる壁'], ['=', '柵'], ['P', '1P位置'], ['M', '2P位置'], ['Q', '3P位置'], ['R', '4P位置']];
+const BTIP = { P: '1Pの開始位置です(必須)。', M: '2Pの開始位置です(必須)。', Q: '3Pの開始位置です。置かないと、自動で空いた所に決まります。', R: '4Pの開始位置です。置かないと、自動で空いた所に決まります。' };
 const EDCOL = { '#': '#5b6b8c', '%': '#a07040', '=': '#58b89a', P: '#4cd', M: '#4cd', Q: '#6f8', '<': '#e0b04a', '>': '#e0b04a' };
 const EDTIP = {
   '.': '床: 何もない通路です。置いたものを消す消しゴムにもなります。',
@@ -2983,7 +2986,7 @@ const EDTIP = {
 let edTipT = null;
 function edTip(t) {
   const el = $('ed-tip'); if (!el) return;
-  el.textContent = EDTIP[t] || t || ''; el.classList.add('on');
+  el.textContent = (ED && ED.type === 'battle' && BTIP[t]) || EDTIP[t] || t || ''; el.classList.add('on');
   clearTimeout(edTipT); edTipT = setTimeout(() => { el.classList.remove('on'); }, 2000);
 }
 const EDLBL = { '0': '⑩', A: '⑪', B: 'A', C: 'B', D: 'C', 1: '①', 2: '②', 3: '③', 4: '④', 5: '⑤', 6: '⑥', 7: '⑦', 8: '⑧', 9: '⑨' };
@@ -2992,8 +2995,8 @@ function edUi() {
   const e = ED;
   return `<div class="ed-bar">名前 <input id="ed-name" maxlength="20" value="${esc(e.name)}"> 幅 <input id="ed-cols" type="number" min="10" max="30" value="${e.cols}"> 高さ <input id="ed-rows" type="number" min="8" max="21" value="${e.rows}">
     背景 <select id="ed-theme">${THEMES.map((t, i) => `<option value="${i}"${i === e.theme ? ' selected' : ''}>${t.name}</option>`).join('')}</select>
-    レイヤー <select id="ed-layer"><option value="n"${e.layer === 'n' ? ' selected' : ''}>通常</option><option value="c"${e.layer === 'c' ? ' selected' : ''}>クレイジー追加</option></select></div>
-    <div class="ed-pal">${PAL.map(([c, l]) => `<button class="btn pal${c === e.tool ? ' on' : ''}" data-tool="${c}">${l}</button>`).join('')}</div>
+    ${e.type === 'battle' ? '<b>バトルマップ</b>' : '<b>インベイドマップ</b> レイヤー <select id="ed-layer"><option value="n"' + (e.layer === 'n' ? ' selected' : '') + '>通常</option><option value="c"' + (e.layer === 'c' ? ' selected' : '') + '>クレイジー追加</option></select>'}</div>
+    <div class="ed-pal">${(e.type === 'battle' ? BPAL : PAL).map(([c, l]) => `<button class="btn pal${c === e.tool ? ' on' : ''}" data-tool="${c}">${l}</button>`).join('')}</div>
     <div id="ed-tip" class="ed-tip"></div>
     <div class="ed-act"><button class="btn" data-act="cr-undo">ひとつ戻す</button><button class="btn" data-act="cr-test">テストプレイ</button><button class="btn" data-act="cr-save">保存</button><button class="btn" data-act="cr-export">書き出し</button><button class="btn" data-act="cr-back">もどる</button></div><p class="ov-hint" id="ed-msg">実際の画面にそのまま置いていきます。ドラッグで連続して置けます。</p>`;
 }
@@ -3007,7 +3010,7 @@ function showEditor() {
   ui.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => { ED.tool = b.dataset.tool; edTip(b.dataset.tool); ui.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('on', x === b)); }));
   $('ed-name').addEventListener('input', ev => { ED.name = ev.target.value; });
   $('ed-theme').addEventListener('change', ev => { ED.theme = +ev.target.value; edRefresh(); });
-  $('ed-layer').addEventListener('change', ev => { ED.layer = ev.target.value; edTip(ev.target.value === 'c' ? 'クレイジー追加レイヤー: ここに置いた敵は、クレイジー以上の難易度でだけ増えて出ます(床の上のみ・敵のみ)。紫の枠が目印です。' : '通常レイヤー: すべての難易度で使う配置です。'); });
+  if ($('ed-layer')) $('ed-layer').addEventListener('change', ev => { ED.layer = ev.target.value; edTip(ev.target.value === 'c' ? 'クレイジー追加レイヤー: ここに置いた敵は、クレイジー以上の難易度でだけ増えて出ます(床の上のみ・敵のみ)。紫の枠が目印です。' : '通常レイヤー: すべての難易度で使う配置です。'); });
   const rs = () => { const c = Math.max(10, Math.min(30, +$('ed-cols').value || 24)), r = Math.max(8, Math.min(21, +$('ed-rows').value || 15)); if (c !== ED.cols || r !== ED.rows) { edResize(c, r); showEditor(); } };
   $('ed-cols').addEventListener('change', rs); $('ed-rows').addEventListener('change', rs);
   edRefresh();
@@ -3017,7 +3020,7 @@ function edRefresh() {   // 実際のゲームと同じ描画で見せるため�
   dropCustom(); const m = edToSave();
   STAGES.push({ name: m.name, custom: true, theme: m.theme, hint: '', boss: false, grid: m.grid });
   killedIds = new Set(); bossHpMem = {}; MP = false;
-  loadStage(STAGES.length - 1, true); ED.hx = -1; state = 'edit';
+  loadStage(STAGES.length - 1, true); ED.hx = -1; state = 'edit'; if (ED.type === 'battle') { GATE = null; ENTRY = null; }
 }
 function edUndo() { const t = EDU.pop(); if (!t) { edMsg('これ以上もどせません'); return; } const [g, c] = JSON.parse(t); ED.g = g; ED.c = c; edRefresh(); }
 function edPaint(x, y) {
@@ -3034,7 +3037,7 @@ function edPaint(x, y) {
   for (let yy = Math.max(0, y - 1); yy <= Math.min(e.rows - 1, y + 1); yy++) for (let xx = Math.max(0, x - 1); xx <= Math.min(e.cols - 1, x + 1); xx++)   // 既存のボスの枠の中には、床以外は置けない
     if (/^[BCD]$/.test(e.g[yy][xx]) && !(xx === x && yy === y && t === '.')) { if (!(xx === x && yy === y)) { if (t !== '.') return; } }
   if (isBoss && (x < 2 || y < 2 || x > e.cols - 3 || y > e.rows - 3)) return;   // 3×3が外壁にかからない位置だけ
-  if (t === 'P' || t === 'M' || t === 'Q') for (const r of e.g) for (let i = 0; i < r.length; i++) if (r[i] === t) r[i] = '.';
+  if (t === 'P' || t === 'M' || t === 'Q' || t === 'R') for (const r of e.g) for (let i = 0; i < r.length; i++) if (r[i] === t) r[i] = '.';
   e.g[y][x] = t; e.c[y][x] = '.';
   if (isBoss) { /* 3×3の中心。周りは床にしておく */ for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if ((dx || dy) && xx > 0 && yy > 0 && xx < e.cols - 1 && yy < e.rows - 1 && !/^[PMQ]$/.test(e.g[yy][xx])) e.g[yy][xx] = '.'; } }
 }
@@ -3060,12 +3063,15 @@ function edOverlay(now) {   // 実際の画面の上に、エディタ専用の�
       const te = makeEnemy(ENEMY_CH[cc], x, y); ctx.globalAlpha = e.layer === 'c' ? 0.9 : 0.6; drawEnemy(te, now); ctx.globalAlpha = 1;
       ctx.strokeStyle = '#c78bff'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.strokeRect(x * T + 3, y * T + 3, T - 6, T - 6); ctx.setLineDash([]);
     }
-    if (ch === 'M' || ch === 'Q') {   // マルチの開始位置: 本物の自機を半透明で
+    if (e.type === 'battle' && 'PMQR'.includes(ch) && ch !== '.') {
+      const bi = 'PMQR'.indexOf(ch); ctx.globalAlpha = 0.8; drawPlayerOne({ x: cx, y: cy, r: CFG.player.radius, ang: 0, alive: true, idx: bi }); ctx.globalAlpha = 1;
+      ctx.fillStyle = BCOL[bi]; ctx.font = '700 11px sans-serif'; ctx.fillText((bi + 1) + 'P', cx, cy - 22);
+    } else if (e.type !== 'battle' && (ch === 'M' || ch === 'Q')) {   // マルチの開始位置: 本物の自機を半透明で
       ctx.globalAlpha = 0.75; drawPlayerOne({ x: cx, y: cy, r: CFG.player.radius, ang: 0, alive: true, idx: ch === 'M' ? 0 : 1 }); ctx.globalAlpha = 1;
       ctx.fillStyle = ch === 'M' ? '#8af0ff' : '#7dffa0'; ctx.font = '700 11px sans-serif'; ctx.fillText(ch === 'M' ? '1P' : '2P', cx, cy - 22);
     }
     if (/^[BCD]$/.test(ch)) { ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]); ctx.strokeRect((x - 1) * T + 1, (y - 1) * T + 1, T * 3 - 2, T * 3 - 2); ctx.setLineDash([]); }
-    if (ch === 'P') { ctx.fillStyle = '#8af0ff'; ctx.font = '700 11px sans-serif'; ctx.fillText('ソロ', cx, cy - 22); }
+    if (ch === 'P' && e.type !== 'battle') { ctx.fillStyle = '#8af0ff'; ctx.font = '700 11px sans-serif'; ctx.fillText('ソロ', cx, cy - 22); }
   }
   if (e.hx >= 0 && e.hx < e.cols && e.hy >= 0 && e.hy < e.rows) {   // カーソル位置に、置くものの見た目を半透明で
     const t = e.tool, cx = e.hx * T + T / 2, cy = e.hy * T + T / 2;
@@ -3078,6 +3084,7 @@ function edOverlay(now) {   // 実際の画面の上に、エディタ専用の�
 function edMsg(t) { const m = $('ed-msg'); if (m) m.textContent = t; }
 function edValid() {
   const flat = ED.g.map(r => r.join('')).join('');
+  if (ED.type === 'battle') return (flat.includes('P') && flat.includes('M')) ? '' : '1P位置と2P位置を置いてください';
   if (!flat.includes('P')) return 'ソロの開始位置(P)を置いてください';
   if (!flat.includes('>')) return '出口(>)を外壁に置いてください';
   if (!/[0-9A-D]/.test(flat)) return '敵を1体以上置いてください';
@@ -3090,9 +3097,11 @@ function playCustom(quick) {
   startIdx = STAGES.length - 1; MODE = 'create'; MP = false;
   if (quick) { DIFF = TESTDIFF || DIFFS[1]; begin(); } else showMenu('diff');   // エディタからのテストは、難易度の選択を飛ばしてその場で始める
 }
-function exportJson(list) { return JSON.stringify({ version: 5, stages: list.map(m => ({ name: m.name, theme: m.theme || 0, grid: m.grid, crazy: m.crazy ? m.crazy.join('\n') : '' })) }); }
+function exportJson(list) { return JSON.stringify({ version: 5, stages: list.map(m => ({ name: m.name, type: m.type === 'battle' ? 'battle' : 'invade', theme: m.theme || 0, grid: m.grid, crazy: m.crazy ? m.crazy.join('\n') : '' })) }); }
 function createAct(a, v) {
-  if (a === 'new') { ED = newEd(30, 15); EDI = -1; ED.snap = JSON.stringify(edToSave()); showEditor(); }
+  if (a === 'new') { lobbyPanel(`<h2 class="ov-title">マップの種類</h2><div class="menu-grid"><button class="btn" data-act="cr-newi">インベイドマップ<small>敵を置いて、出口まで進む区画(スタンダード向け)</small></button><button class="btn" data-act="cr-newb">バトルマップ<small>プレイヤー同士で戦う対戦マップ(2〜4人)</small></button><button class="btn" data-act="back" data-v="crback">もどる</button></div>`); }
+  else if (a === 'newi') { ED = newEd(30, 15, 'invade'); EDI = -1; ED.snap = JSON.stringify(edToSave()); showEditor(); }
+  else if (a === 'newb') { ED = newEd(24, 16, 'battle'); EDI = -1; ED.snap = JSON.stringify(edToSave()); showEditor(); }
   else if (a === 'edit') { ED = edFromSave(loadMaps()[+v]); EDI = +v; ED.snap = JSON.stringify(edToSave()); showEditor(); }
   else if (a === 'play') { ED = edFromSave(loadMaps()[+v]); EDI = +v; playCustom(); }
   else if (a === 'del') { const m = loadMaps()[+v]; if (!m) return; lobbyPanel(`<h2 class="ov-title">削除の確認</h2><p class="ov-msg">「${esc(m.name)}」を削除します。元には戻せません。よろしいですか？</p><div class="menu-grid"><button class="btn" data-act="cr-delyes" data-v="${+v}">削除する</button><button class="btn" data-act="back" data-v="cmenu">やめる</button></div>`); }
@@ -3107,7 +3116,7 @@ function createAct(a, v) {
   else if (a === 'backno') { const u = EDU; showEditor(); EDU = u; }
   else if (a === 'undo') edUndo();
   else if (a === 'save') { const m = loadMaps(), sv = edToSave(); if (EDI >= 0 && m[EDI]) m[EDI] = sv; else { m.push(sv); EDI = m.length - 1; } const ok = saveMaps(m); if (ok) ED.snap = JSON.stringify(sv); edMsg(ok ? '保存しました' : '保存できませんでした(ブラウザの保存が使えません)'); }
-  else if (a === 'test') { const er = edValid(); if (er) { edMsg(er); return; } playCustom(true); }
+  else if (a === 'test') { if (ED.type === 'battle') { edMsg('バトルマップは、マルチプレイの「バトル」で遊べます(テストプレイはありません)'); return; } const er = edValid(); if (er) { edMsg(er); return; } playCustom(true); }
   else if (a === 'export') { lobbyPanel(`<h2 class="ov-title">書き出し</h2><p class="ov-msg">このJSONを保存しておくと、あとで「読み込み」で戻せます</p>${codeBox('code-out', true, esc(exportJson([edToSave()])))}<div class="menu-grid"><button class="btn" data-act="cr-copy">コピー</button><button class="btn" data-act="back" data-v="crback">もどる</button></div>`); }
   else if (a === 'copy') { const b = $('code-out'); b.select(); try { navigator.clipboard.writeText(b.value); } catch (e) { document.execCommand('copy'); } }
   else if (a === 'import') { state = 'title'; menuStep = 'cmenu'; lobbyPanel(`<h2 class="ov-title">読み込み</h2><p class="ov-msg">マップメーカーのJSONを貼ってください</p>${codeBox('code-in', false)}<div class="menu-grid"><button class="btn" data-act="cr-doimport">読み込む</button><button class="btn" data-act="back" data-v="crback">もどる</button></div><p class="ov-hint" id="net-msg"></p>`); }
@@ -3116,7 +3125,7 @@ function createAct(a, v) {
       const j = JSON.parse($('code-in').value), list = Array.isArray(j.stages) ? j.stages : j.grid ? [j] : [];
       if (!list.length) throw new Error('マップが見つかりません');
       const maps = loadMaps();
-      list.forEach((st, i) => maps.push({ name: st.name || ('取り込み' + (i + 1)), theme: st.theme || 0, grid: st.grid.map(String), crazy: st.crazy ? (Array.isArray(st.crazy) ? st.crazy : String(st.crazy).split('\n')) : null }));
+      list.forEach((st, i) => maps.push({ name: st.name || ('取り込み' + (i + 1)), type: st.type === 'battle' ? 'battle' : 'invade', theme: st.theme || 0, grid: st.grid.map(String), crazy: st.crazy ? (Array.isArray(st.crazy) ? st.crazy : String(st.crazy).split('\n')) : null }));
       saveMaps(maps); ED = null; showMenu('cmenu');
     } catch (err) { const m = $('net-msg'); if (m) m.textContent = '読み込めませんでした: ' + err.message; }
   }
