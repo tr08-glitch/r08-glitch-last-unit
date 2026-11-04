@@ -197,7 +197,7 @@ h1{margin:0;font-family:var(--font-display);font-weight:800;font-size:clamp(24px
   <details class="spec">
     <summary>この版の仮仕様</summary>
     <ul>
-      <li>弾同士(ショット・ミサイル)が当たると相殺します。</li>
+      <li>弾同士(ショット・ミサイル)が当たると相殺します(敵どうしの攻撃は相殺しません)。</li>
       <li>爆発と、自分が撃って跳ね返ったショットは、自分にも当たります(敵も同じ)。</li>
       <li>1発当たると死亡します。残機3で(5区画解放ごとに+1)、やられると区画の最初から再開します。そのとき倒した敵は復活せず、壊した壁は元に戻ります。敵と相打ちでやられたときは、その敵も復活します。Rキーのやり直しでは敵が全員復活します。</li>
       <li>爆発は壁の向こうには届きません。ひび割れた壁は、プラズママインとプラズマグレネードの爆発で壊れます。</li>
@@ -244,22 +244,22 @@ const CFG = {
 
 const SPREAD_ANG = 20 * Math.PI / 180;   // ⑩の斜めショットの角度
 const ETYPE = {   // 番号は敵の番号(①〜⑪。マップでは⑩は0、⑪はA)
-  rubber:   { speed: 0,                kind: 'shot',    fireEvery: [2.0, 3.0], windup: 0.50, err: 0.06, opening: 'rubber' },   // ⑫ ①と同じ+戦闘開始時に、ランダムな向きへリバウンドボールを1発だけ放つ
-  turret:   { speed: 0,                kind: 'shot',    fireEvery: [2.0, 3.0], windup: 0.50, err: 0.06 },                                  // ① 動かず、1発ずつ撃つ
-  walker:   { speed: 60,               kind: 'shot',    fireEvery: [2.0, 3.0], windup: 0.45, err: 0.08 },                                  // ② 動き、1発ずつ撃つ
-  missiler: { speed: 60, kind: 'missile', fireEvery: [1.3, 1.9], windup: 0.55, err: 0.03 },                      // ③ 動き、パルスミサイルを1発ずつ撃つ
-  burster:  { speed: 60, kind: 'shot',    fireEvery: [2.6, 3.6], windup: 0.45, err: 0.08, burst: [2, 3], burstGap: 0.16 },  // ④ 動き、2〜3発ずつ撃つ
-  layer:    { speed: 60, kind: 'shot',    fireEvery: [2.0, 3.0], windup: 0.45, err: 0.08, mine: [5, 9] },                     // ⑤ ②と同じ+移動しながらたまに地雷を置く
-  bouncer:  { speed: 0,  kind: 'missile', fireEvery: [2.6, 3.6], windup: 0.70, err: 0.03, bounces: 2 },                   // ⑥ 動かず、2回跳ね返るミサイルを撃つ
-  rusher:   { speed: 100, kind: 'shot',    fireEvery: [2.6, 3.6], windup: 0.45, err: 0.08, burst: [2, 3], burstGap: 0.16 },  // ⑦ ④と同じ+移動速度90
-  lobber:   { speed: 0,  kind: 'grenade', fireEvery: [3.5, 4.5], windup: 0.60, range: 360, grenade: true },             // ⑧ 動かず、擲弾を撃つ
-  heavy:    { speed: 60, kind: 'shot',    fireEvery: [2.6, 3.6], windup: 0.45, err: 0.08, burst: [2, 3], burstGap: 0.16, hp: 3 },  // ⑪ ④(連射兵)と同じ+移動速度50、3発で倒せる
-  bossa:    { speed: 60, kind: 'shot', fireEvery: [1.6, 2.4], windup: 0.6, hp: 20, r: 56, boss: true, pats: ['shot', 'missile'], missiles: 2 },                        // ボスA(3×3)。区画1〜5(敵①②③)の総括
-  bossc:    { speed: 75, kind: 'shot', fireEvery: [1.3, 2.0], windup: 0.55, hp: 40, r: 56, boss: true, pats: ['burst', 'burst', 'missile', 'bounce', 'grenade'], missiles: 3, mine: [7, 11] },   // ボスC(3×3)。区画11〜15(敵④⑤①⑥②③⑦⑧⑪)の総括。素早く動き、連射・ミサイル・2回反射・擲弾を使い、地雷も置く
-  bossd:    { speed: 80, kind: 'shot', fireEvery: [1.2, 1.8], windup: 0.55, hp: 50, r: 56, boss: true, pats: ['fan', 'ring', 'laser', 'burst', 'missile', 'grenade', 'ring'], missiles: 3, mine: [6, 10] },   // ボスD(3×3)。区画16〜20の総括。扇状ミサイル・全方位弾・レーザーを使う
-  bossb:    { speed: 60, kind: 'shot', fireEvery: [1.5, 2.2], windup: 0.6, hp: 30, r: 56, boss: true, pats: ['shot', 'missile', 'burst', 'bounce'], missiles: 3 },   // ボスB(3×3)。区画6〜10(敵④③⑤①⑥)の総括。地雷は置かない
-  trident:  { speed: 60, kind: 'missile', fireEvery: [2.4, 3.2], windup: 0.55, err: 0.03, spread: true },                  // ⑩ 動き、正面にパルスミサイル+左右20度にパルスショットを同時に撃つ
-  gazer:    { speed: 0,  kind: 'laser',   fireEvery: [8.0, 8.0], windup: 2.0, err: 0 },                                         // ⑨ 動かず、レーザー(プラズマレイ)を撃つ。再使用8秒
+  rubber:   { speed: 0,                kind: 'shot',    fireEvery: [1.5, 2.5], windup: 0.50, err: 0.06, opening: 'rubber' },   // ⑫ ①と同じ+戦闘開始時に、ランダムな向きへリバウンドボールを1発だけ放つ
+  turret:   { speed: 0,                kind: 'shot',    fireEvery: [1.5, 2.5], windup: 0.50, err: 0.06 },                                  // ① 動かず、1発ずつ撃つ
+  walker:   { speed: 60,               kind: 'shot',    fireEvery: [1.5, 2.5], windup: 0.45, err: 0.08 },                                  // ② 動き、1発ずつ撃つ
+  missiler: { speed: 60, kind: 'missile', fireEvery: [0.8, 1.4], windup: 0.55, err: 0.03 },                      // ③ 動き、パルスミサイルを1発ずつ撃つ
+  burster:  { speed: 60, kind: 'shot',    fireEvery: [2.1, 3.1], windup: 0.45, err: 0.08, burst: [2, 3], burstGap: 0.16 },  // ④ 動き、2〜3発ずつ撃つ
+  layer:    { speed: 60, kind: 'shot',    fireEvery: [1.5, 2.5], windup: 0.45, err: 0.08, mine: [5, 9] },                     // ⑤ ②と同じ+移動しながらたまに地雷を置く
+  bouncer:  { speed: 0,  kind: 'missile', fireEvery: [2.1, 3.1], windup: 0.70, err: 0.03, bounces: 2 },                   // ⑥ 動かず、2回跳ね返るミサイルを撃つ
+  rusher:   { speed: 100, kind: 'shot',    fireEvery: [2.1, 3.1], windup: 0.45, err: 0.08, burst: [2, 3], burstGap: 0.16 },  // ⑦ ④と同じ+移動速度90
+  lobber:   { speed: 0,  kind: 'grenade', fireEvery: [3.0, 4.0], windup: 0.60, range: 360, grenade: true },             // ⑧ 動かず、擲弾を撃つ
+  heavy:    { speed: 60, kind: 'shot',    fireEvery: [2.1, 3.1], windup: 0.45, err: 0.08, burst: [2, 3], burstGap: 0.16, hp: 3 },  // ⑪ ④(連射兵)と同じ+移動速度50、3発で倒せる
+  bossa:    { speed: 60, kind: 'shot', fireEvery: [1.1, 1.9], windup: 0.6, hp: 20, r: 56, boss: true, pats: ['shot', 'missile'], missiles: 2 },                        // ボスA(3×3)。区画1〜5(敵①②③)の総括
+  bossc:    { speed: 75, kind: 'shot', fireEvery: [0.8, 1.5], windup: 0.55, hp: 40, r: 56, boss: true, pats: ['burst', 'burst', 'missile', 'bounce', 'grenade'], missiles: 3, mine: [7, 11] },   // ボスC(3×3)。区画11〜15(敵④⑤①⑥②③⑦⑧⑪)の総括。素早く動き、連射・ミサイル・2回反射・擲弾を使い、地雷も置く
+  bossd:    { speed: 80, kind: 'shot', fireEvery: [0.7, 1.3], windup: 0.55, hp: 50, r: 56, boss: true, pats: ['fan', 'ring', 'laser', 'burst', 'missile', 'grenade', 'ring'], missiles: 3, mine: [6, 10] },   // ボスD(3×3)。区画16〜20の総括。扇状ミサイル・全方位弾・レーザーを使う
+  bossb:    { speed: 60, kind: 'shot', fireEvery: [1.0, 1.7], windup: 0.6, hp: 30, r: 56, boss: true, pats: ['shot', 'missile', 'burst', 'bounce'], missiles: 3 },   // ボスB(3×3)。区画6〜10(敵④③⑤①⑥)の総括。地雷は置かない
+  trident:  { speed: 60, kind: 'missile', fireEvery: [1.9, 2.7], windup: 0.55, err: 0.03, spread: true },                  // ⑩ 動き、正面にパルスミサイル+左右20度にパルスショットを同時に撃つ
+  gazer:    { speed: 0,  kind: 'laser',   fireEvery: [5.0, 5.0], windup: 1.3, err: 0 },                                         // ⑨ 動かず、レーザー(プラズマレイ)を撃つ。再使用5秒
 };
 
 /* ---------- 画像(埋め込み) ---------- */
@@ -1334,7 +1334,7 @@ function fireLaser(o, ang, side) {
     for (const e of enemies) if (!dead.has(e) && side === 'p' && Math.hypot(e.x - q.x, e.y - q.y) < e.r * 0.8) dead.add(e);
     for (const pp of PL) if (pp.alive && Math.hypot(pp.x - q.x, pp.y - q.y) < pp.r * 0.8 && (side === 'e' || (o === pp && b > 0) || (TW() && o !== pp && o.idx !== undefined))) killSet.add(pp);
     for (const mi of mines) if (Math.hypot(mi.x - q.x, mi.y - q.y) < mi.r + 3) boom.add(mi);
-    for (const m of missiles) if (!m.dead && m.kind !== 'rubber' && m.owner !== o && Math.hypot(m.x - q.x, m.y - q.y) < m.r + 3) { m.dead = true; burst(m.x, m.y, magicColor(m), 6, 100, 0.28); }
+    for (const m of missiles) if (!m.dead && m.kind !== 'rubber' && !(side === 'e' && m.side === 'e') && m.owner !== o && Math.hypot(m.x - q.x, m.y - q.y) < m.r + 3) { m.dead = true; burst(m.x, m.y, magicColor(m), 6, 100, 0.28); }
   }
   pts.push({ x: q.x, y: q.y });
   lasers.push({ pts, t: 0, dur: K.show, side });
@@ -1759,7 +1759,7 @@ function hitTargets(m) {
   }
   // 弾同士は相殺
   for (const o of missiles) {
-    if (o !== m && !o.dead && o.kind !== 'rubber' && m.kind !== 'rubber' && Math.hypot(m.x - o.x, m.y - o.y) < m.r + o.r + 2) {
+    if (o !== m && !o.dead && o.kind !== 'rubber' && m.kind !== 'rubber' && !(m.side === 'e' && o.side === 'e') && Math.hypot(m.x - o.x, m.y - o.y) < m.r + o.r + 2) {
       o.dead = true; burst((m.x + o.x) / 2, (m.y + o.y) / 2, COLOR.text, 8, 130, 0.3); return true;
     }
   }
@@ -2647,7 +2647,9 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'Space') subRelease(); });
 window.addEventListener('blur', () => { keys.clear(); mouse.down = false; if (P) P.laserAim = false; if (state === 'play' && !MP) togglePause(); });
+let lastPE = null;
 function setMouse(e) {
+  lastPE = { clientX: e.clientX, clientY: e.clientY };
   const r = lrect(cv), q = lpt(e);
   mouse.x = Math.max(0, Math.min(W, (q.x - r.left) / r.width * W));
   mouse.y = Math.max(0, Math.min(H, (q.y - r.top) / r.height * H));
@@ -3463,10 +3465,33 @@ function drawFloaters() {
 loadStage(0);
 showTitle();
 let last = performance.now();
+/* 盤面が画面より縦に長いときは、画面に収まる高さで表示し、プレイヤーを中心に視野を動かす(PC) */
+let camOff = 0, camTall = false, camH = 0;
+function camUpdate(dt) {
+  const f = $('field');
+  let tall = false, ah = 0, ch = 0;
+  if (!IS_TOUCH && state !== 'edit' && W && H) {
+    const fw = f.clientWidth, top = f.getBoundingClientRect().top + window.scrollY;
+    ch = fw * H / W; ah = Math.max(260, Math.floor(innerHeight - top - 14));
+    tall = ch > ah + 4;
+  }
+  if (tall) {
+    if (!camTall || camH !== ah) { f.style.aspectRatio = 'auto'; f.style.height = ah + 'px'; camTall = true; camH = ah; }
+    cv.style.height = ch + 'px';
+    const me = PL[ME] || P, py = me ? me.y / H * ch : ch / 2, target = Math.max(0, Math.min(ch - ah, py - ah / 2));
+    camOff += (target - camOff) * Math.min(1, dt * 9);
+    if (Math.abs(target - camOff) < 0.3) camOff = target;
+    cv.style.transform = 'translateY(' + (-camOff).toFixed(1) + 'px)';
+    if (lastPE) setMouse(lastPE);   // 視野が動いても、カーソルの指す場所が合うように
+  } else if (camTall) {
+    camTall = false; camOff = 0; camH = 0; f.style.height = ''; f.style.aspectRatio = COLS + ' / ' + ROWS; cv.style.height = ''; cv.style.transform = '';
+  }
+}
 function frame(t) {
   const dt = Math.min(0.033, (t - last) / 1000);
   last = t;
   update(dt);
+  camUpdate(dt);
   draw(t / 1000);
   updateHud();
   requestAnimationFrame(frame);
