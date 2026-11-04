@@ -3465,26 +3465,29 @@ function drawFloaters() {
 loadStage(0);
 showTitle();
 let last = performance.now();
-/* 盤面が画面より縦に長いときは、画面に収まる高さで表示し、プレイヤーを中心に視野を動かす(PC) */
-let camOff = 0, camTall = false, camH = 0;
+/* PC: 盤面の1マスの大きさを、横20マスの盤面と同じくらいに保つ。縦に長くて画面に収まらないときは、プレイヤーを中心に視野が動く */
+let camOff = 0, camOn = false, camKey = '';
 function camUpdate(dt) {
   const f = $('field');
-  let tall = false, ah = 0, ch = 0;
+  let on = false, ah = 0, ch = 0, cw = 0, fw = 0;
   if (!IS_TOUCH && state !== 'edit' && W && H) {
-    const fw = f.clientWidth, top = f.getBoundingClientRect().top + window.scrollY;
-    ch = fw * H / W; ah = Math.max(260, Math.floor(innerHeight - top - 14));
-    tall = ch > ah + 4;
+    fw = f.clientWidth; const top = f.getBoundingClientRect().top + window.scrollY;
+    const sc = Math.min(fw / W, fw / (20 * T));   // 画面上の倍率(横20マス分を基準。横が長い盤面は幅いっぱい)
+    cw = W * sc; ch = H * sc; ah = Math.max(260, Math.floor(innerHeight - top - 14));
+    on = sc < fw / W - 0.001 || ch > ah + 4;
+    if (camOn && !on) { /* 解除の判定は下で */ }
   }
-  if (tall) {
-    if (!camTall || camH !== ah) { f.style.aspectRatio = 'auto'; f.style.height = ah + 'px'; camTall = true; camH = ah; }
-    cv.style.height = ch + 'px';
-    const me = PL[ME] || P, py = me ? me.y / H * ch : ch / 2, target = Math.max(0, Math.min(ch - ah, py - ah / 2));
+  if (on) {
+    const fh = Math.min(Math.round(ch), ah), key = [fh, Math.round(cw), Math.round(ch)].join();
+    if (key !== camKey) { f.style.aspectRatio = 'auto'; f.style.height = fh + 'px'; cv.style.width = cw.toFixed(1) + 'px'; cv.style.height = ch.toFixed(1) + 'px'; cv.style.marginLeft = ((fw - cw) / 2).toFixed(1) + 'px'; camKey = key; }
+    camOn = true;
+    const me = PL[ME] || P, py = me ? me.y / H * ch : ch / 2, target = ch <= fh ? 0 : Math.max(0, Math.min(ch - fh, py - fh / 2));
     camOff += (target - camOff) * Math.min(1, dt * 9);
     if (Math.abs(target - camOff) < 0.3) camOff = target;
     cv.style.transform = 'translateY(' + (-camOff).toFixed(1) + 'px)';
     if (lastPE) setMouse(lastPE);   // 視野が動いても、カーソルの指す場所が合うように
-  } else if (camTall) {
-    camTall = false; camOff = 0; camH = 0; f.style.height = ''; f.style.aspectRatio = COLS + ' / ' + ROWS; cv.style.height = ''; cv.style.transform = '';
+  } else if (camOn) {
+    camOn = false; camKey = ''; camOff = 0; f.style.height = ''; f.style.aspectRatio = COLS + ' / ' + ROWS; cv.style.width = ''; cv.style.height = ''; cv.style.marginLeft = ''; cv.style.transform = '';
   }
 }
 function frame(t) {
