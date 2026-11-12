@@ -3272,6 +3272,7 @@ function drawCrosshair(x, y, al) {
   ctx.restore();
 }
 function draw(now) {
+  { const cc = state === 'edit' ? 'crosshair' : ''; if (cv.style.cursor !== cc) cv.style.cursor = cc; }   // エディタ中はふつうのカーソルを出す
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   if (CUT && (state === 'ending' || (state === 'win' && CUT.hold)) && CUT.t >= CUT.B) { cutDrawSpace(now); return; }
